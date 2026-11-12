@@ -35,7 +35,6 @@ namespace ServerHostingBusiness
     public class ServerHostingBehaviour : ModBehaviour
     {
         public const float MinOfferMbps = 1f;
-        public const int MaxOffersPerMonth = 3;
         public const double CooldownMonths = 6.0;
 
         public static bool Patched;
@@ -240,10 +239,13 @@ namespace ServerHostingBusiness
                 if (p == null || p.Userbase <= 0 || p.ExternalHostingActive) continue;
                 // ExternalHosting can keep the ID of an offer that already expired; only skip live offers.
                 if (p.ExternalHosting != 0) { bool live; lock (dw.AllDeals) live = dw.AllDeals.ContainsKey(p.ExternalHosting); if (live) continue; }
-                if (!(p.DevCompany is SimulatedCompany sc) || sc.IsSubsidiary() || sc.IsPlayerOwned()) continue;
+                if (!(p.DevCompany is SimulatedCompany sc)) continue;
+                // Subsidiaries ask too when their owner can't host them. AI owners never run servers
+                // in the simulation, so only subsidiaries you own (you host those yourself) are skipped.
+                if (sc.IsPlayerOwned() || (sc.IsSubsidiary() && sc.OwnerCompany != null && sc.OwnerCompany.Player)) continue;
                 if (p.ServerReq <= 0f && Profiles.Get(p).Kind == ProductKind.None) continue;
                 float months = SDateTime.GetMonths(p.Release, now);
-                if (p.ServerReq > 0f && months < 1f) continue;   // vanilla sends the release offer
+                if (p.ServerReq > 0f && months < 1f && !sc.IsSubsidiary()) continue;   // vanilla sends the release offer (not for subsidiaries)
                 if (!Patched && months > 24f) continue;          // without the patch old offers would be rejected
                 if (SaveState.Cooldown.TryGetValue(p.ID, out int last) &&
                     (Clock.Stamp - last) / (double)Clock.MinutesPerMonth < CooldownMonths) continue;
@@ -255,7 +257,7 @@ namespace ServerHostingBusiness
                 candidates.Add(new KeyValuePair<SoftwareProduct, float>(p, mbps * UnityEngine.Random.Range(0.7f, 1f)));
             }
 
-            foreach (var c in candidates.OrderByDescending(x => x.Value).Take(MaxOffersPerMonth))
+            foreach (var c in candidates.OrderByDescending(x => x.Value))
             {
                 SDateTime? t = DealWindow.FindReceptionTime();
                 if (!t.HasValue) { Debug.Log("[Server Hosting Business] No receptionist found, offers skipped."); break; }

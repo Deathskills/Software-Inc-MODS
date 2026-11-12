@@ -27,7 +27,8 @@ Mbps per 100k active users at selected years:
 
 **Hosting offers**
 - Vanilla still sends one offer when an AI product that needs servers is released.
-- Each month the mod also sends up to 3 offers for AI products (not subsidiaries) that aren't hosted yet and need more than 1 Mbps, including older products. The biggest products are offered first. A product is offered again at most every 6 months.
+- Each month the mod also sends an offer for every AI product that isn't hosted yet and needs more than 1 Mbps, including older products. There's no monthly limit, like vanilla. A product is offered again at most every 6 months.
+- Subsidiaries of AI companies send offers too, since AI owners don't run servers. Subsidiaries you own don't send you offers.
 - An offer stays open for 24 months, then expires if you haven't accepted or refused it.
 - You still need a receptionist to receive offers, as in vanilla.
 
