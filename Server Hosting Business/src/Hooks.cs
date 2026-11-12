@@ -2,7 +2,6 @@
 // Hooks has no Harmony types in any signature, so the game can still load this DLL
 // (and run the parts that need no patch) when 0HarmonyLoader is not installed.
 using System;
-using System.Reflection;
 
 namespace ServerHostingBusiness
 {
@@ -57,7 +56,27 @@ namespace ServerHostingBusiness
         }
     }
 
-    /// <summary>Only this class touches Harmony. Calls into it are wrapped in try/catch.</summary>
+    // Patch declarations. Harmony finds these through PatchAll(), so the mod never references
+    // System.Reflection (the game's mod security check rejects that namespace).
+    [HarmonyLib.HarmonyPatch(typeof(SoftwareProduct), "GetLoadRequirement")]
+    public static class LoadRequirementPatch
+    {
+        public static void Postfix(SoftwareProduct __instance, ref float __result)
+        {
+            Hooks.LoadRequirementPostfix(__instance, ref __result);
+        }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(ServerDeal), "StillValid")]
+    public static class StillValidPatch
+    {
+        public static void Postfix(ServerDeal __instance, bool active, ref bool __result)
+        {
+            Hooks.StillValidPostfix(__instance, active, ref __result);
+        }
+    }
+
+    /// <summary>Only this class calls Harmony. Calls into it are wrapped in try/catch.</summary>
     public static class HarmonyBridge
     {
         public const string Id = "deathskills.softwareinc.serverhostingbusiness";
@@ -90,15 +109,7 @@ namespace ServerHostingBusiness
         private static void PatchCore()
         {
             var h = new HarmonyLib.Harmony(Id);
-            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-
-            MethodInfo load = typeof(SoftwareProduct).GetMethod("GetLoadRequirement", all, null, Type.EmptyTypes, null);
-            MethodInfo valid = typeof(ServerDeal).GetMethod("StillValid", all, null, new[] { typeof(bool) }, null);
-            if (load == null || valid == null)
-                throw new MissingMethodException("Server Hosting Business: game methods not found, this game version is not supported.");
-
-            h.Patch(load, postfix: new HarmonyLib.HarmonyMethod(typeof(Hooks).GetMethod(nameof(Hooks.LoadRequirementPostfix))));
-            h.Patch(valid, postfix: new HarmonyLib.HarmonyMethod(typeof(Hooks).GetMethod(nameof(Hooks.StillValidPostfix))));
+            h.PatchAll(); // patches the [HarmonyPatch] classes in this assembly
             _harmony = h;
         }
 
