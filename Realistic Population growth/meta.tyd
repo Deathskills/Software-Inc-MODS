@@ -1,0 +1,3 @@
+Name "Realistic Population growth"
+Author "Deathskills + Claude"
+Description "Replaces the fixed market population with a curve based on real-world user growth of the largest platform ecosystems. Holds at the vanilla 145.6M until 1995, then grows each year to 1.4B in 2050 and stays there. Keeps the vanilla Computer/Console/Phone multipliers and patches nothing else, so it stays compatible with other mods."

@@ -1,5 +1,7 @@
 # Realistic Population growth
 
+Authors: Deathskills + Claude
+
 A Software Inc. code mod that replaces the game's fixed market population (vanilla: 145,613,576 for every year) with a curve that follows real-world growth.
 
 ## What it does
