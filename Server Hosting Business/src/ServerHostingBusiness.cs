@@ -164,6 +164,12 @@ namespace ServerHostingBusiness
             // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
             deal.PerPower = (float)(MonthlyPricePerMbps(cls) / 1440.0);
             SaveState.Priced[deal.ID] = Clock.Stamp;
+            double isp = Server.GetISPCost(), power = ObjectDatabase.Instance.CheapestServer() * 24.0;
+            int stars = GameSettings.Instance.MyCompany.BusinessStars;
+            Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} + profit ${4:F2} ({5} stars) = ${6:F2} per Mbps per month, shown in the deal window as ${7:F2}.",
+                deal.Product.Name, cls, isp, power, Rates.Profit(cls) * Rates.StarFactor(stars), stars,
+                isp + power + Rates.Profit(cls) * Rates.StarFactor(stars), deal.PerPower * 60f));
         }
 
         private static bool IsClient()
