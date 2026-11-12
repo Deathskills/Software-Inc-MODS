@@ -221,15 +221,19 @@ namespace ServerHostingBusiness
         {
             if (IsClient()) return;
             GameSettings gs = GameSettings.Instance;
-            if (gs.simulation == null || gs.Difficulty.Deals < 0.5f) return;
+            if (gs.simulation == null) return;
+            if (gs.Difficulty.Deals < 0.5f) { Debug.Log("[Server Hosting Business] Deals are turned off in this game's difficulty settings, so no hosting offers are sent."); return; }
             DealWindow dw = HUD.Instance.dealWindow;
             if (dw == null) return;
+            int needServers = 0, bigEnough = 0, sent = 0; float biggest = 0f;
 
             SDateTime now = SDateTime.Now();
             var candidates = new List<KeyValuePair<SoftwareProduct, float>>();
             foreach (SoftwareProduct p in gs.simulation.GetAllProducts(false).ToList())
             {
-                if (p == null || p.Userbase <= 0 || p.ExternalHostingActive || p.ExternalHosting != 0) continue;
+                if (p == null || p.Userbase <= 0 || p.ExternalHostingActive) continue;
+                // ExternalHosting can keep the ID of an offer that already expired; only skip live offers.
+                if (p.ExternalHosting != 0) { bool live; lock (dw.AllDeals) live = dw.AllDeals.ContainsKey(p.ExternalHosting); if (live) continue; }
                 if (!(p.DevCompany is SimulatedCompany sc) || sc.IsSubsidiary() || sc.IsPlayerOwned()) continue;
                 if (p.ServerReq <= 0f && Profiles.Get(p).Kind == ProductKind.None) continue;
                 float months = SDateTime.GetMonths(p.Release, now);
@@ -238,20 +242,27 @@ namespace ServerHostingBusiness
                 if (SaveState.Cooldown.TryGetValue(p.ID, out int last) &&
                     (Clock.Stamp - last) / (double)Clock.MinutesPerMonth < CooldownMonths) continue;
                 float mbps = p.GetLoadRequirement() * (float)Clock.Factor;
+                needServers++;
+                if (mbps > biggest) biggest = mbps;
                 if (mbps < MinOfferMbps) continue;
+                bigEnough++;
                 candidates.Add(new KeyValuePair<SoftwareProduct, float>(p, mbps * UnityEngine.Random.Range(0.7f, 1f)));
             }
 
             foreach (var c in candidates.OrderByDescending(x => x.Value).Take(MaxOffersPerMonth))
             {
                 SDateTime? t = DealWindow.FindReceptionTime();
-                if (!t.HasValue) break; // no receptionist, same as vanilla
+                if (!t.HasValue) { Debug.Log("[Server Hosting Business] No receptionist found, offers skipped."); break; }
                 var deal = new ServerDeal(c.Key);
                 ApplyPrice(deal);
                 SaveState.Offers[deal.ID] = Clock.Stamp;
                 SaveState.Cooldown[c.Key.ID] = Clock.Stamp;
                 dw.AddDeal(deal, t, toEveryone: true);
+                sent++;
             }
+            Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "[Server Hosting Business] {0}: {1} unhosted AI products need servers (largest {2:F1} Mbps), {3} need {4}+ Mbps, {5} offers sent.",
+                now.ToCompactString(), needServers, biggest, bigEnough, MinOfferMbps, sent));
         }
 
         private void Prune()
