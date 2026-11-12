@@ -145,12 +145,53 @@ namespace ServerHostingBusiness
         }
 
         // ---------- pricing
-        /// <summary>Price per Mbps per in-game month: ISP + power (vanilla math) + profit.</summary>
+        /// <summary>
+        /// Watts per Mbps of the player's own servers (all non-cloud server groups), or the
+        /// vanilla cheapest-server value when the player has no servers yet.
+        /// </summary>
+        public static double WattsPerMbps(out bool fromFleet)
+        {
+            fromFleet = false;
+            double watts = 0, mbps = 0;
+            try
+            {
+                foreach (ServerGroup g in GameSettings.Instance.GetAllServerGroups(false, false))
+                {
+                    if (g == null || g.CloudProvider > 0) continue;
+                    foreach (Server s in g.Servers.OfType<Server>())
+                    {
+                        if (s == null || s.furn == null || s.Power <= 0f) continue;
+                        watts += s.furn.Wattage;
+                        mbps += s.Power;
+                    }
+                }
+            }
+            catch (Exception) { mbps = 0; }
+            if (mbps > 0 && watts > 0)
+            {
+                fromFleet = true;
+                return watts / mbps;
+            }
+            // CheapestServer() = (watts per Mbps) * 0.03 * electricity price
+            return ObjectDatabase.Instance.CheapestServer() / (0.03 * Furniture.GetElectricityPrice());
+        }
+
+        /// <summary>
+        /// Electricity per Mbps per in-game month. The game bills a server
+        /// Wattage * load share * 0.03 * electricity price / days-per-month each hour,
+        /// which is 0.72 * watts-per-Mbps * electricity price per month at any month length.
+        /// </summary>
+        public static double MonthlyPowerPerMbps(out double wattsPerMbps, out bool fromFleet)
+        {
+            wattsPerMbps = WattsPerMbps(out fromFleet);
+            return wattsPerMbps * 0.03 * 24.0 * Furniture.GetElectricityPrice();
+        }
+
+        /// <summary>Price per Mbps per in-game month: ISP + the player's real server power + profit.</summary>
         public static double MonthlyPricePerMbps(RateClass cls)
         {
             double isp = Server.GetISPCost();
-            // Power part kept exactly as vanilla computes it (CheapestServer() / 60 per minute).
-            double power = ObjectDatabase.Instance.CheapestServer() * 24.0;
+            double power = MonthlyPowerPerMbps(out _, out _);
             double profit = Rates.Profit(cls) * Rates.StarFactor(GameSettings.Instance.MyCompany.BusinessStars);
             return isp + power + profit;
         }
@@ -160,15 +201,18 @@ namespace ServerHostingBusiness
             ProductProfile prof = Profiles.Get(deal.Product);
             RateClass cls = Rates.ClassOf(prof.Kind);
             if (cls == RateClass.Vanilla) return;
-            // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
-            deal.PerPower = (float)(MonthlyPricePerMbps(cls) / 1440.0);
-            SaveState.Priced[deal.ID] = Clock.Stamp;
-            double isp = Server.GetISPCost(), power = ObjectDatabase.Instance.CheapestServer() * 24.0;
+            double isp = Server.GetISPCost();
+            double power = MonthlyPowerPerMbps(out double wpm, out bool fleet);
             int stars = GameSettings.Instance.MyCompany.BusinessStars;
+            double profit = Rates.Profit(cls) * Rates.StarFactor(stars);
+            double monthly = isp + power + profit;
+            // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
+            deal.PerPower = (float)(monthly / 1440.0);
+            SaveState.Priced[deal.ID] = Clock.Stamp;
             Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} + profit ${4:F2} ({5} stars) = ${6:F2} per Mbps per month, shown in the deal window as ${7:F2}.",
-                deal.Product.Name, cls, isp, power, Rates.Profit(cls) * Rates.StarFactor(stars), stars,
-                isp + power + Rates.Profit(cls) * Rates.StarFactor(stars), deal.PerPower * 60f));
+                "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} ({4:F2} W per Mbps, {5}) + profit ${6:F2} ({7} stars) = ${8:F2} per Mbps per month, shown in the deal window as ${9:F2} (game dollars).",
+                deal.Product.Name, cls, isp, power, wpm, fleet ? "your servers" : "cheapest server, you have none yet",
+                profit, stars, monthly, deal.PerPower * 60f));
         }
 
         private static bool IsClient()
