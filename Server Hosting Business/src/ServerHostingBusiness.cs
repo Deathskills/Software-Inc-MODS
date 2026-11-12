@@ -168,7 +168,8 @@ namespace ServerHostingBusiness
 
         private static bool IsClient()
         {
-            try { return SINetworking.NetworkManager.IsClient; } catch (Exception) { return false; }
+            // SINetworking types are blocked for mods; GameSettings exposes the same information.
+            try { GameSettings gs = GameSettings.Instance; return gs != null && gs.IsNetworkMode && !gs.IsHost; } catch (Exception) { return false; }
         }
 
         private void RepriceDeals()

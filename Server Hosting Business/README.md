@@ -53,7 +53,7 @@ Without 0HarmonyLoader the mod still loads, but only the offer and pricing parts
 ## Compatibility
 
 - Patches two methods, both with postfixes only: `SoftwareProduct.GetLoadRequirement` and `ServerDeal.StillValid`.
-- Uses no `System.Reflection` or `System.IO`, so it passes the game's mod security check without an "all access" prompt.
+- Uses none of the namespaces or types the game blocks for mods (for example `System.Reflection`, `System.IO` and `SINetworking`), so it passes the mod security check without an "all access" prompt.
 - Doesn't change any data files, features or software types.
 - Works alongside **Realistic Population growth**. Bigger populations mean bigger userbases, so bandwidth and hosting income grow with it.
 - Other mods that rewrite hosting deals or server load (for example ones that replace `GetLoadRequirement` or deal pricing) will conflict.
