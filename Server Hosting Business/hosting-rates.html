@@ -1,0 +1,214 @@
+<title>Server Hosting Rates</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; a combined rates chart up top, then a year-driven scenario table. */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --fg:#14181c; --muted:#5a636c; --faint:#8b939b;
+  --line:#dde1e5; --grid:#eceff1; --accent:#1f6f8b; --chip:#e6eef2;
+  --good:#1d7a46; --warn:#a86a00;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111417; --surface:#181c20; --fg:#eef1f3; --muted:#a6afb7; --faint:#77808a; --line:#2b3238; --grid:#22282d; --accent:#5fb3d0; --chip:#1f2a31;
+  --good:#4cc283; --warn:#e0a234;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --surface:#181c20; --fg:#eef1f3; --muted:#a6afb7; --faint:#77808a; --line:#2b3238; --grid:#22282d; --accent:#5fb3d0; --chip:#1f2a31;
+  --good:#4cc283; --warn:#e0a234;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px;display:grid;gap:28px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:1.9rem} h2{font-size:1.25rem}
+p{margin:0;max-width:68ch}
+.lede{color:var(--muted)}
+.eyebrow{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+section{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}
+.rates{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.rate{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:2px}
+.rate .k{font-size:.8rem;color:var(--muted)}
+.rate .v{font-family:var(--f-mono);font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums}
+.rate .s{font-size:.8rem;color:var(--faint)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+button.lg,button.tg,button.yr{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+button.lg[aria-pressed="false"]{opacity:.45}
+button.tg[aria-pressed="true"],button.yr[aria-pressed="true"]{background:var(--chip);border-color:var(--accent)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+.sw.dash{background:none!important;border-top:2px dashed currentColor;height:0}
+.chartbox{position:relative;overflow-x:auto}
+svg{display:block;width:100%;height:auto}
+svg text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:190px;display:grid;gap:2px}
+.tip .row{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.tip .row span:last-child{font-family:var(--f-mono)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:860px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--grid);vertical-align:top}
+th{font-size:.75rem;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase;background:var(--surface);position:sticky;top:0}
+td:first-child,th:first-child{text-align:left}
+td .bw{font-family:var(--f-mono);font-size:.85rem}
+td .pf{font-family:var(--f-mono);font-size:.85rem;color:var(--good)}
+td .dim{color:var(--faint);font-size:.78rem}
+tr.grp td{background:var(--bg);font-family:var(--f-display);font-weight:600;font-size:.9rem;text-align:left;color:var(--fg)}
+.tag{font-size:.7rem;border-radius:4px;padding:1px 6px;background:var(--chip);color:var(--muted);margin-left:6px;white-space:nowrap}
+ol.q{margin:0;padding-left:20px;display:grid;gap:8px;max-width:72ch}
+.note{font-size:.85rem;color:var(--muted)}
+select{font:inherit;font-size:.85rem;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+@media (max-width:520px){h1{font-size:1.5rem}}
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <div class="eyebrow">Software Inc. mod · draft numbers for review</div>
+    <h1>Server Hosting Rates</h1>
+    <p class="lede">Bandwidth per 100k users and hosting profit under the proposed mod, compared with vanilla. Your 5-year chart points are interpolated year by year, and every product uses the current in-game year's rate, so older products also need more bandwidth as time passes. Profit is per in-game month at an average business-star rating.</p>
+  </header>
+
+  <section>
+    <h2>Profit per Mbps per month</h2>
+    <div class="rates">
+      <div class="rate"><span class="k">Game · Multiplayer</span><span class="v">$2.00</span><span class="s">on top of $18 ISP + power</span></div>
+      <div class="rate"><span class="k">Game · MMO</span><span class="v">$6.00</span><span class="s">on top of $18 ISP + power</span></div>
+      <div class="rate"><span class="k">Enterprise · OS, Antivirus, Office</span><span class="v">$8.55</span><span class="s">on top of $18 ISP + power</span></div>
+      <div class="rate"><span class="k">Vanilla · any product</span><span class="v">$0.90–4.50</span><span class="s">5–25% of cost by stars, avg ≈ $2.70</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bandwidth per 100k users, by in-game year</h2>
+    <div class="panel">
+      <div class="controls" style="justify-content:space-between">
+        <div class="legend" id="legend"></div>
+        <div class="controls"><button class="tg" id="logBtn" aria-pressed="true">Log scale</button></div>
+      </div>
+      <div class="chartbox" id="chartbox"><svg id="chart" viewBox="0 0 1000 420" role="img" aria-label="Mbps per 100k users by year for every product type"></svg><div class="tip" id="tip" hidden></div></div>
+      <p class="note">Dashed lines are vanilla. Vanilla OS, Antivirus and Office use no bandwidth unless an add-on is picked, so they have no vanilla line. After 2025, your baselines keep growing in a straight line at their 2020–2025 rate. Multiplayer and MMO keep growing 5% every 5 years.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Bandwidth and profit by product</h2>
+    <div class="controls">
+      <span class="note">In-game year</span>
+      <div class="controls" id="years"></div>
+    </div>
+    <div class="tablewrap"><table id="tbl"></table></div>
+    <p class="note">Each cell shows the bandwidth needed, with the host's monthly profit below it. Revenue is profit plus $18 per Mbps for ISP, plus vanilla's power share. Vanilla profit uses the vanilla average margin (about $2.70 per Mbps). Add-on values follow vanilla, so they grow slowly with the current year as in the base game.</p>
+  </section>
+
+  <section>
+    <h2>Agreed rules</h2>
+    <ol class="q">
+      <li><b>Zero stays zero.</b> When a 5-year point is 0, the rate stays 0 until the next point, then jumps to it (Console OS is 0 until 2000, then 0.1).</li>
+      <li><b>The rate follows the current year.</b> A product released in 2003 and still used in 2015 uses the 2015 rate, to reflect rising costs and better technology.</li>
+      <li><b>After 2025, baselines keep growing in a straight line</b> at their 2020–2025 rate per year (for example, Computer OS +27 per year, Office cloud +76 per year).</li>
+      <li><b>Multiplayer 1990–2000</b> goes in a straight line from vanilla's 62 to your 120.</li>
+      <li><b>MMO</b> is the whole game (Multiplayer + MMO). It goes in a straight line from vanilla's 477 in 1990 to 900 in 2020, then grows 5% every 5 years like Multiplayer.</li>
+      <li><b>Office.</b> Ticking Network adds the "Office offline" rate. Adding Cloud backup also adds the "Office (cloud)" rate, on top of vanilla Cloud backup.</li>
+      <li><b>OS baseline</b> applies to every OS, whether or not Network is ticked. (Network is forced on Computer and Phone OS and optional on Console OS.)</li>
+      <li><b>Business stars</b> still matter, as in vanilla: profit per Mbps ranges from 80% at 0 stars to 120% at 5 stars around your targets. These tables show the 100% midpoint.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const YEARS5=[1985,1990,1995,2000,2005,2010,2015,2020,2025];
+const BASE={pc:[0.01,0.05,0.5,3,12,35,105,220,355],console:[0,0,0,0.1,1,12,55,125,191],phone:[0,0,0,0,0.1,5,35,95,142],
+ av:[0.01,0.05,0.5,3,12,25,45,60,75],offOff:[0.01,0.03,0.3,2,8,15,25,35,45],offCloud:[0,0,0,0.1,0.5,8,45,180,560]};
+function baseAt(k,y){const v=BASE[k];if(y<=1985)return v[0];if(y>=2025)return v[8]+(v[8]-v[7])/5*(y-2025);const i=Math.floor((y-1985)/5),t=(y-YEARS5[i])/5;if(t===0)return v[i];if(v[i]===0)return 0;return v[i]+(v[i+1]-v[i])*t;}
+const F=y=>0.75+Math.log10(y-1969);
+function mpAt(y){if(y<1990)return 0;const a=30*F(1990);if(y<=2000)return a+(120-a)*(y-1990)/10;if(y<=2010)return 120+230*(y-2000)/10;if(y<=2020)return 350+150*(y-2010)/10;return 500*Math.pow(1.05,(y-2020)/5);}
+function mmoAt(y){if(y<1990)return 0;const a=230*F(1990);if(y<=2020)return a+(900-a)*(y-1990)/30;return 900*Math.pow(1.05,(y-2020)/5);}
+const vanMP=y=>y<1990?0:30*F(y), vanMMO=y=>y<1990?0:230*F(y);
+
+const SERIES=[
+ {id:'pc',name:'Computer OS',c:'--s1',f:y=>baseAt('pc',y)},
+ {id:'console',name:'Console OS',c:'--s2',f:y=>baseAt('console',y)},
+ {id:'phone',name:'Phone OS',c:'--s3',f:y=>baseAt('phone',y)},
+ {id:'av',name:'Antivirus (Network)',c:'--s4',f:y=>baseAt('av',y)},
+ {id:'offOff',name:'Office offline (Network)',c:'--s5',f:y=>baseAt('offOff',y)},
+ {id:'offCloud',name:'Office cloud',c:'--s6',f:y=>baseAt('offCloud',y)},
+ {id:'mp',name:'Multiplayer',c:'--s7',f:mpAt,van:vanMP},
+ {id:'mmo',name:'MMO',c:'--s8',f:mmoAt,van:vanMMO},
+];
+const on=Object.fromEntries(SERIES.map(s=>[s.id,true]));
+let logScale=true;
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=v=>v===0?'0':v<1?v.toFixed(2):v<10?v.toFixed(1):Math.round(v).toLocaleString();
+
+const legend=document.getElementById('legend');
+SERIES.forEach(s=>{const b=document.createElement('button');b.className='lg';b.id='lg-'+s.id;b.setAttribute('aria-pressed','true');
+ b.innerHTML=`<span class="sw" style="background:var(${s.c})"></span>${s.name}`;b.onclick=()=>{on[s.id]=!on[s.id];b.setAttribute('aria-pressed',on[s.id]);draw();};legend.appendChild(b);});
+document.getElementById('logBtn').onclick=e=>{logScale=!logScale;e.currentTarget.setAttribute('aria-pressed',logScale);draw();};
+
+const Y0=1985,Y1=2035,W=1000,H=420,M={l:56,r:16,t:14,b:34};
+const xs=y=>M.l+(y-Y0)/(Y1-Y0)*(W-M.l-M.r);
+function ysFn(max){const h=H-M.t-M.b;if(logScale){const lo=Math.log10(0.01),hi=Math.log10(10000);return v=>v<=0?null:M.t+h-(Math.log10(Math.max(v,0.01))-lo)/(hi-lo)*h;}return v=>M.t+h-(v/max)*h;}
+function draw(){
+ const svg=document.getElementById('chart');const grid=css('--grid'),line=css('--line');
+ let max=0;SERIES.forEach(s=>{if(!on[s.id])return;for(let y=Y0;y<=Y1;y++){max=Math.max(max,s.f(y),s.van?s.van(y):0);}});
+ max=max<=0?1:Math.ceil(max/100)*100;const ys=ysFn(max);
+ let g='';const ticks=logScale?[0.01,0.1,1,10,100,1000,10000]:[0,max/4,max/2,max*3/4,max];
+ ticks.forEach(t=>{const y=ys(t===0?0:t)??(H-M.b);g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${y}" y2="${y}" stroke="${grid}" stroke-width="1"/><text x="${M.l-8}" y="${y+4}" text-anchor="end">${fmt(t)}</text>`;});
+ for(let y=Y0;y<=Y1;y+=5){const x=xs(y);g+=`<line x1="${x}" x2="${x}" y1="${H-M.b}" y2="${H-M.b+4}" stroke="${line}"/><text x="${x}" y="${H-M.b+18}" text-anchor="middle">${y}</text>`;}
+ g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${H-M.b}" y2="${H-M.b}" stroke="${line}"/>`;
+ g+=`<text x="${M.l}" y="${M.t-2}" text-anchor="start" style="font-size:10px">Mbps / 100k users</text>`;
+ const path=f=>{let d='',pen=false;for(let y=Y0;y<=Y1;y+=0.25){const v=f(y),py=ys(v);if(py===null||v<=0){pen=false;continue;}d+=(pen?'L':'M')+xs(y).toFixed(1)+','+py.toFixed(1);pen=true;}return d;};
+ SERIES.forEach(s=>{if(!on[s.id])return;const c=css(s.c);
+  if(s.van)g+=`<path d="${path(s.van)}" fill="none" stroke="${c}" stroke-width="2" stroke-dasharray="5 4" opacity=".8"/>`;
+  g+=`<path d="${path(s.f)}" fill="none" stroke="${c}" stroke-width="2"/>`;});
+ g+=`<line id="xh" x1="0" x2="0" y1="${M.t}" y2="${H-M.b}" stroke="${css('--faint')}" stroke-width="1" visibility="hidden"/>`;
+ g+=`<rect id="hit" x="${M.l}" y="${M.t}" width="${W-M.l-M.r}" height="${H-M.t-M.b}" fill="transparent"/>`;
+ svg.innerHTML=g;
+ const hit=svg.querySelector('#hit'),xh=svg.querySelector('#xh'),tip=document.getElementById('tip'),box=document.getElementById('chartbox');
+ const move=ev=>{const r=svg.getBoundingClientRect();const px=(ev.clientX-r.left)/r.width*W;let yr=Math.round(Y0+(px-M.l)/(W-M.l-M.r)*(Y1-Y0));yr=Math.max(Y0,Math.min(Y1,yr));
+  const x=xs(yr);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
+  let h=`<b>${yr}</b>`;SERIES.forEach(s=>{if(!on[s.id])return;h+=`<div class="row"><span><span class="sw" style="background:var(${s.c})"></span> ${s.name}</span><span>${fmt(s.f(yr))}</span></div>`;if(s.van)h+=`<div class="row"><span style="color:var(--faint)">&nbsp;&nbsp;vanilla</span><span style="color:var(--faint)">${fmt(s.van(yr))}</span></div>`;});
+  tip.innerHTML=h;tip.hidden=false;const br=box.getBoundingClientRect();let lx=ev.clientX-br.left+box.scrollLeft+14;if(lx+220>br.width+box.scrollLeft)lx-=250;tip.style.left=lx+'px';tip.style.top='10px';};
+ hit.addEventListener('pointermove',move);hit.addEventListener('pointerleave',()=>{tip.hidden=true;xh.setAttribute('visibility','hidden');});
+}
+
+// ---- scenario table
+const USERS=[1e5,1e6,5e6,1e7];
+const RATE={mp:2,mmo:6,ent:8.55},VAN_MARGIN=18*0.15;
+function rows(y){const f=F(y),os=[['pc','Computer OS'],['console','Console OS'],['phone','Phone OS']];const R=[];
+ R.push({grp:'Games'});
+ R.push({n:'Game, no Multiplayer',bw:0,van:0,r:'mp'});
+ R.push({n:'Game + Multiplayer',bw:mpAt(y),van:vanMP(y),r:'mp'});
+ R.push({n:'Game + Multiplayer + MMO',bw:mmoAt(y),van:vanMMO(y),r:'mmo'});
+ os.forEach(([k,n])=>{const b=baseAt(k,y),a=20*f;R.push({grp:n});
+  R.push({n:'Baseline only',bw:b,van:0,r:'ent'});
+  R.push({n:'+ Auto-update',bw:b+a,van:a,r:'ent'});
+  R.push({n:'+ App store',bw:b+a,van:a,r:'ent'});
+  R.push({n:'+ Cloud backup',bw:b+a,van:a,r:'ent'});
+  R.push({n:'+ all three add-ons',bw:b+3*a,van:3*a,r:'ent'});});
+ R.push({grp:'Antivirus'});
+ R.push({n:'No Network',bw:0,van:0,r:'ent'});
+ R.push({n:'Network',bw:baseAt('av',y),van:0,r:'ent'});
+ R.push({n:'Network + Virus database',bw:baseAt('av',y)+10*f,van:10*f,r:'ent'});
+ R.push({grp:'Office Software'});
+ R.push({n:'No Network',bw:0,van:0,r:'ent'});
+ R.push({n:'Network',bw:baseAt('offOff',y),van:0,r:'ent'});
+ R.push({n:'Network + Cloud backup',bw:baseAt('offOff',y)+baseAt('offCloud',y)+100*f,van:100*f,r:'ent'});
+ return R;}
+const bwFmt=m=>m===0?'—':m>=1e6?(m/1e6).toFixed(2)+' Tbps':m>=1000?(m/1000).toFixed(m>=1e4?0:1)+' Gbps':m>=10?Math.round(m)+' Mbps':m.toFixed(m>=1?1:2)+' Mbps';
+const money=v=>v===0?'—':v>=1e6?'$'+(v/1e6).toFixed(2)+'M':v>=1e3?'$'+(v/1e3).toFixed(v>=1e5?0:1)+'k':'$'+v.toFixed(v<10?2:0);
+let year=2020;
+const yrBox=document.getElementById('years');
+[1990,1995,2000,2005,2010,2015,2020,2025,2030].forEach(y=>{const b=document.createElement('button');b.className='yr';b.id='yr-'+y;b.textContent=y;b.setAttribute('aria-pressed',y===year);b.onclick=()=>{year=y;yrBox.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));table();};yrBox.appendChild(b);});
+function table(){let h='<thead><tr><th>Product</th><th>Mbps / 100k</th>'+USERS.map(u=>`<th>${u>=1e6?(u/1e6)+'M':(u/1e3)+'k'} users</th>`).join('')+'<th>Vanilla, 1M users</th></tr></thead><tbody>';
+ rows(year).forEach(r=>{if(r.grp){h+=`<tr class="grp"><td colspan="7">${r.grp}</td></tr>`;return;}
+  const tag={mp:'$2.00',mmo:'$6.00',ent:'$8.55'}[r.r];
+  h+=`<tr><td>${r.n}<span class="tag">${tag}/Mbps</span></td><td><span class="bw">${fmt(r.bw)}</span></td>`;
+  USERS.forEach(u=>{const m=r.bw*u/1e5;h+=`<td><div class="bw">${bwFmt(m)}</div><div class="pf">${money(m*RATE[r.r])}</div></td>`;});
+  const vm=r.van*10;h+=`<td><div class="bw">${bwFmt(vm)}</div><div class="dim">${money(vm*VAN_MARGIN)}</div></td></tr>`;});
+ document.getElementById('tbl').innerHTML=h+'</tbody>';}
+draw();table();
+const mq=window.matchMedia('(prefers-color-scheme: dark)');mq.addEventListener&&mq.addEventListener('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>
