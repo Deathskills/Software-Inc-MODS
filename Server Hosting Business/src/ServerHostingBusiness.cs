@@ -2,7 +2,7 @@
 // Makes server hosting a real business line:
 //  - every OS, and antivirus/office software with Network, needs bandwidth that grows by era
 //  - multiplayer and MMO bandwidth follow new curves
-//  - AI products (new and older ones) ask the player for hosting once they need >= 100 Mbps
+//  - AI products (new and older ones) ask the player for hosting once they need >= 1 Mbps
 //  - hosting deals pay ISP + power (vanilla math) plus a fixed profit per Mbps
 // Needs 0HarmonyLoader for the bandwidth patch. Without it, only offers and pricing run.
 using System;
@@ -34,7 +34,7 @@ namespace ServerHostingBusiness
 
     public class ServerHostingBehaviour : ModBehaviour
     {
-        public const float MinOfferMbps = 100f;
+        public const float MinOfferMbps = 1f;
         public const int MaxOffersPerMonth = 3;
         public const double CooldownMonths = 6.0;
 
