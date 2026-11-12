@@ -111,12 +111,16 @@ namespace ServerHostingBusiness
     {
         /// <summary>Hosting offers this mod created: deal ID -> date offered.</summary>
         public static readonly Dictionary<uint, int> Offers = new Dictionary<uint, int>();
+        /// <summary>Hosting deals already given this mod's price: deal ID -> date priced.
+        /// The price is set once, when the offer is made, and never changed after.</summary>
+        public static readonly Dictionary<uint, int> Priced = new Dictionary<uint, int>();
         /// <summary>Products this mod made an offer for: product ID -> date offered.</summary>
         public static readonly Dictionary<uint, int> Cooldown = new Dictionary<uint, int>();
 
         public static void Reset()
         {
             Offers.Clear();
+            Priced.Clear();
             Cooldown.Clear();
         }
 

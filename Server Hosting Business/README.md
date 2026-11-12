@@ -35,11 +35,11 @@ Mbps per 100k active users at selected years:
 - Price per Mbps per month = ISP cost + power (both exactly as vanilla computes them) + profit.
 - Profit per Mbps per month: Multiplayer $2.00, MMO $6.00, OS / Antivirus / Office $8.55.
 - Business stars scale the profit from 80% (0 stars) to 120% (5 stars).
-- An offer's price follows current conditions until you accept it. After that it's locked, like vanilla.
+- A deal's price per Mbps is locked when the offer is made, like vanilla. Its bandwidth (and so its total pay) still grows with the curves.
 - Other server products (for example distribution platforms) keep vanilla pricing.
 
 **Unchanged on purpose**
-- User retention. Vanilla keeps users of server products longer; the mod only patches the bandwidth calculation, so retention stays vanilla.
+- User retention. Vanilla keeps users of server products longer. The bandwidth this mod adds doesn't count for that: only products with the vanilla Multiplayer/network server features get the bonus, exactly as in vanilla.
 - The vanilla power-cost formula in deal pay.
 
 ## Requirements and install

@@ -45,7 +45,7 @@ namespace ServerHostingBusiness
         private int _lastHour = int.MinValue, _lastDay = int.MinValue, _lastMonth = int.MinValue;
 
         // Save data that arrived before the game instance was ready.
-        private string _pendingOffers, _pendingCooldown;
+        private string _pendingOffers, _pendingCooldown, _pendingPriced;
         private bool _hasPending;
 
         public override void OnActivate()
@@ -86,12 +86,14 @@ namespace ServerHostingBusiness
         {
             data["SHB_Offers"] = SaveState.Pack(SaveState.Offers);
             data["SHB_Cooldown"] = SaveState.Pack(SaveState.Cooldown);
+            data["SHB_Priced"] = SaveState.Pack(SaveState.Priced);
         }
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
         {
             _pendingOffers = data.Get<string>("SHB_Offers", null);
             _pendingCooldown = data.Get<string>("SHB_Cooldown", null);
+            _pendingPriced = data.Get<string>("SHB_Priced", null);
             _hasPending = true;
             if (_seenGame != null && _seenGame == GameSettings.Instance) ApplyPending();
         }
@@ -102,6 +104,7 @@ namespace ServerHostingBusiness
             _hasPending = false;
             SaveState.Unpack(_pendingOffers, SaveState.Offers);
             SaveState.Unpack(_pendingCooldown, SaveState.Cooldown);
+            SaveState.Unpack(_pendingPriced, SaveState.Priced);
         }
 
         // ---------- main loop
@@ -160,6 +163,7 @@ namespace ServerHostingBusiness
             if (cls == RateClass.Vanilla) return;
             // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
             deal.PerPower = (float)(MonthlyPricePerMbps(cls) / 1440.0);
+            SaveState.Priced[deal.ID] = Clock.Stamp;
         }
 
         private static bool IsClient()
@@ -176,9 +180,12 @@ namespace ServerHostingBusiness
             lock (dw.AllDeals) deals = dw.AllDeals.Values.ToList();
             foreach (Deal d in deals)
             {
-                // Offers follow current conditions; once accepted the price is locked, like vanilla.
-                if (d is ServerDeal sd && sd.Incoming && !sd.Active && sd.Product != null)
-                    ApplyPrice(sd);
+                // Price is set once, when the offer is made, then locked (bandwidth can still grow).
+                if (d is ServerDeal sd && sd.Incoming && sd.Product != null && !SaveState.Priced.ContainsKey(sd.ID))
+                {
+                    if (sd.Active) SaveState.Priced[sd.ID] = Clock.Stamp; // accepted before the mod saw it: keep its price
+                    else ApplyPrice(sd);
+                }
             }
         }
 
@@ -251,6 +258,13 @@ namespace ServerHostingBusiness
             double maxAge = Math.Max(CooldownMonths, Hooks.OfferLifetimeMonths) + 1;
             foreach (uint k in SaveState.Offers.Where(kv => (Clock.Stamp - kv.Value) / (double)Clock.MinutesPerMonth > Hooks.OfferLifetimeMonths + 1).Select(kv => kv.Key).ToList())
                 SaveState.Offers.Remove(k);
+            DealWindow dw = HUD.Instance.dealWindow;
+            if (dw != null)
+            {
+                List<uint> gone;
+                lock (dw.AllDeals) gone = SaveState.Priced.Where(kv => !dw.AllDeals.ContainsKey(kv.Key) && (Clock.Stamp - kv.Value) / (double)Clock.MinutesPerMonth > 1).Select(kv => kv.Key).ToList();
+                foreach (uint k in gone) SaveState.Priced.Remove(k);
+            }
             foreach (uint k in SaveState.Cooldown.Where(kv => (Clock.Stamp - kv.Value) / (double)Clock.MinutesPerMonth > maxAge).Select(kv => kv.Key).ToList())
                 SaveState.Cooldown.Remove(k);
         }
