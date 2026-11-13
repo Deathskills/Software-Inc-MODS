@@ -328,7 +328,9 @@ namespace ISPBusiness
 
                 string reason = InLoadGrace ? null : EndReason(d);
                 if (reason != null) { ended.Add(new KeyValuePair<IspDeal, string>(d, reason)); continue; }
-                if (demand < Config.MinOfferMbps)
+                // Town traffic is tiny by design (it's paid mostly by coverage), so the "needs under 1 Mbps"
+                // rule only ends product and company deals.
+                if (!d.IsMunicipal && demand < Config.MinOfferMbps)
                 {
                     if (d.LowSince < 0) d.LowSince = now;
                     else if (GameClock.MonthsBetween(d.LowSince, now) >= Config.DealEndMonths)
