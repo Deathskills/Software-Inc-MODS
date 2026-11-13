@@ -145,14 +145,15 @@ namespace ServerHostingBusiness
         }
 
         // ---------- pricing
-        /// <summary>Price per Mbps per in-game month: ISP + power (vanilla math) + profit.</summary>
+        /// <summary>Electricity charged per Mbps per in-game month, whatever servers the player uses.</summary>
+        public const double PowerPerMbpsMonth = 7.00;
+
+        /// <summary>Price per Mbps per in-game month: ISP (vanilla) + fixed power + profit.</summary>
         public static double MonthlyPricePerMbps(RateClass cls)
         {
             double isp = Server.GetISPCost();
-            // Power part kept exactly as vanilla computes it (CheapestServer() / 60 per minute).
-            double power = ObjectDatabase.Instance.CheapestServer() * 24.0;
             double profit = Rates.Profit(cls) * Rates.StarFactor(GameSettings.Instance.MyCompany.BusinessStars);
-            return isp + power + profit;
+            return isp + PowerPerMbpsMonth + profit;
         }
 
         public static void ApplyPrice(ServerDeal deal)
@@ -160,15 +161,16 @@ namespace ServerHostingBusiness
             ProductProfile prof = Profiles.Get(deal.Product);
             RateClass cls = Rates.ClassOf(prof.Kind);
             if (cls == RateClass.Vanilla) return;
-            // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
-            deal.PerPower = (float)(MonthlyPricePerMbps(cls) / 1440.0);
-            SaveState.Priced[deal.ID] = Clock.Stamp;
-            double isp = Server.GetISPCost(), power = ObjectDatabase.Instance.CheapestServer() * 24.0;
+            double isp = Server.GetISPCost();
             int stars = GameSettings.Instance.MyCompany.BusinessStars;
+            double profit = Rates.Profit(cls) * Rates.StarFactor(stars);
+            double monthly = isp + PowerPerMbpsMonth + profit;
+            // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
+            deal.PerPower = (float)(monthly / 1440.0);
+            SaveState.Priced[deal.ID] = Clock.Stamp;
             Debug.Log(string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} + profit ${4:F2} ({5} stars) = ${6:F2} per Mbps per month, shown in the deal window as ${7:F2}.",
-                deal.Product.Name, cls, isp, power, Rates.Profit(cls) * Rates.StarFactor(stars), stars,
-                isp + power + Rates.Profit(cls) * Rates.StarFactor(stars), deal.PerPower * 60f));
+                "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} + profit ${4:F2} ({5} stars) = ${6:F2} per Mbps per month, shown in the deal window as ${7:F2} (game dollars).",
+                deal.Product.Name, cls, isp, PowerPerMbpsMonth, profit, stars, monthly, deal.PerPower * 60f));
         }
 
         private static bool IsClient()
