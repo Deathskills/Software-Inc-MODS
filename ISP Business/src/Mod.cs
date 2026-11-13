@@ -133,6 +133,7 @@ namespace ISPBusiness
             if (_pendingAssign == null && IspNetwork.Pools.Count > 0)
                 IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool()); // save from milestone A
             Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
+            Deals.MarkLoaded();
             _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = null;
         }
 

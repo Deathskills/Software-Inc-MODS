@@ -93,6 +93,12 @@ namespace ISPBusiness
 
         private static readonly Dictionary<uint, SoftwareProduct> _products = new Dictionary<uint, SoftwareProduct>();
         private static int _productsDay = int.MinValue;
+        private static object _productsSim;            // the MarketSimulation the cache was built from
+        private static float _lastMissRefresh = -999f;  // realtime of the last refresh caused by a cache miss
+
+        /// <summary>Stamp of the last load (or start). For one in-game day after it, missing products or
+        /// companies never end a deal or offer: the game may still be binding its market data.</summary>
+        private static int _loadedAt = int.MinValue;
 
         public static void Reset()
         {
@@ -103,6 +109,9 @@ namespace ISPBusiness
             OtherCompanyClaims.Clear();
             _products.Clear();
             _productsDay = int.MinValue;
+            _productsSim = null;
+            _lastMissRefresh = -999f;
+            _loadedAt = int.MinValue;
             _nextId = 1;
             _lastMonth = int.MinValue;
             _lastDay = int.MinValue;
@@ -112,11 +121,14 @@ namespace ISPBusiness
 
         private static void RefreshProducts(bool force)
         {
-            int day = GameClock.Stamp / (24 * 60);
-            if (!force && day == _productsDay) return;
-            _productsDay = day;
-            _products.Clear();
             GameSettings gs = GameSettings.Instance;
+            object sim = gs != null ? gs.simulation : null;
+            int day = GameClock.Stamp / (24 * 60);
+            // Rebuilt daily, when the market changes (a load replaces it), and never kept empty.
+            if (!force && day == _productsDay && sim == _productsSim && _products.Count > 0) return;
+            _productsDay = day;
+            _productsSim = sim;
+            _products.Clear();
             if (gs == null || gs.simulation == null) return;
             foreach (SoftwareProduct p in gs.simulation.GetAllProducts(false))
                 if (p != null) _products[p.ID] = p;
@@ -125,7 +137,30 @@ namespace ISPBusiness
         private static SoftwareProduct Product(uint id)
         {
             RefreshProducts(false);
-            return _products.TryGetValue(id, out SoftwareProduct p) ? p : null;
+            if (_products.TryGetValue(id, out SoftwareProduct p)) return p;
+            // A miss may just be a stale cache (new release, trade): rebuild it, at most every 2 real seconds.
+            if (Time.realtimeSinceStartup - _lastMissRefresh > 2f)
+            {
+                _lastMissRefresh = Time.realtimeSinceStartup;
+                RefreshProducts(true);
+                if (_products.TryGetValue(id, out p)) return p;
+            }
+            return null;
+        }
+
+        /// <summary>True for one in-game day after a load: nothing is ended for a missing product or company.</summary>
+        private static bool InLoadGrace
+        {
+            get { return _loadedAt != int.MinValue && GameClock.Stamp - _loadedAt < 24 * 60; }
+        }
+
+        /// <summary>Called after mod data is restored (load) or a new game starts.</summary>
+        public static void MarkLoaded()
+        {
+            _loadedAt = GameClock.Stamp;
+            _productsDay = int.MinValue;
+            _products.Clear();
+            Debug.Log("[ISP Business] Restored " + Active.Count + " ISP deals and " + Offers.Count + " offers.");
         }
 
         private static Company CompanyById(uint id)
@@ -240,6 +275,9 @@ namespace ISPBusiness
                 if (!IsAiCompany(c)) return d.CompanyName + " is now owned by a player";
                 return null;
             }
+            if (Product(d.ProductId) != null) return null;
+            RefreshProducts(true);
+            if (_products.Count == 0) return null; // market data not available: never treat that as "left the market"
             return Product(d.ProductId) == null ? "the product left the market" : null;
         }
 
@@ -269,7 +307,7 @@ namespace ISPBusiness
                 // Not in the vanilla Deals window (deals off, or no customer): pay it directly.
                 if (d.Unpaid >= 1.0 && !VanillaDeals.IsShown(d)) PayDirect(d);
 
-                string reason = EndReason(d);
+                string reason = InLoadGrace ? null : EndReason(d);
                 if (reason != null) { ended.Add(new KeyValuePair<IspDeal, string>(d, reason)); continue; }
                 if (demand < Config.MinOfferMbps)
                 {
@@ -454,6 +492,7 @@ namespace ISPBusiness
         private static void ExpireOffers()
         {
             int now = GameClock.Stamp;
+            if (InLoadGrace) { Offers.RemoveAll(o => GameClock.MonthsBetween(o.OfferedAt, now) > Config.OfferLifetimeMonths); return; }
             Offers.RemoveAll(o => GameClock.MonthsBetween(o.OfferedAt, now) > Config.OfferLifetimeMonths || !IsOpenOffer(o));
         }
 
@@ -528,6 +567,7 @@ namespace ISPBusiness
         private static void End(IspDeal d, string notice, bool penalty)
         {
             if (!Active.Remove(d)) return;
+            Debug.Log("[ISP Business] ISP deal " + d.Id + " (" + d.Label + ") ended. " + (notice ?? "Cancelled or folded."));
             PayDirect(d); // whatever the customer hadn't paid yet
             IspNetwork.RemoveProcess(d.Key);
             if (penalty)
