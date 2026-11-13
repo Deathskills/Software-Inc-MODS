@@ -171,6 +171,7 @@ namespace ISPBusiness
         public static void MarkLoaded()
         {
             _loadedAt = GameClock.Stamp;
+            _lastMonth = GameClock.MonthIndex;
             _productsDay = int.MinValue;
             _products.Clear();
             Debug.Log("[ISP Business] Restored " + Active.Count + " ISP deals and " + Offers.Count + " offers.");
@@ -199,6 +200,8 @@ namespace ISPBusiness
         }
 
         /// <summary>Mbps a company needs: its products (minus those another player serves) plus development.</summary>
+        private static readonly HashSet<uint> LocalProductClaims = new HashSet<uint>();
+
         public static double CompanyDemand(Company c, out double dev)
         {
             dev = 0;
@@ -208,7 +211,7 @@ namespace ISPBusiness
             {
                 foreach (SoftwareProduct p in c.Products)
                 {
-                    if (p == null || OtherClaims.ContainsKey(p.ID)) continue;
+                    if (p == null || OtherClaims.ContainsKey(p.ID) || LocalProductClaims.Contains(p.ID)) continue;
                     sum += DemandOf(p);
                 }
             }
@@ -248,7 +251,7 @@ namespace ISPBusiness
             if (d.IsMunicipal) return Municipal.Available(d.Settlement) >= Math.Max(1, d.Residents * 0.5);
             SoftwareProduct p = Product(d.ProductId);
             if (p == null || OtherClaims.ContainsKey(d.ProductId)) return false;
-            return p.DevCompany == null || !CompanyCovered(p.DevCompany.ID);
+            return IsAiCompany(p.DevCompany) && !CompanyCovered(p.DevCompany.ID);
         }
 
         private static bool IsAiCustomer(SoftwareProduct p)
@@ -261,16 +264,25 @@ namespace ISPBusiness
         /// <summary>Sets each deal's process demand for this hour. Called before routing.</summary>
         public static void RefreshDemand()
         {
+            LocalProductClaims.Clear();
+            foreach (IspDeal deal in Active)
+                if (deal.IsProduct) LocalProductClaims.Add(deal.ProductId);
             foreach (IspDeal d in Active)
             {
                 double demand;
                 if (d.IsCompany)
                 {
-                    demand = CompanyDemand(CompanyById(d.CompanyId), out double dev);
+                    Company customer = CompanyById(d.CompanyId);
+                    double dev = 0;
+                    demand = IsAiCompany(customer) ? CompanyDemand(customer, out dev) : 0;
                     d.DevMbps = dev;
                 }
                 else if (d.IsMunicipal) demand = Municipal.DemandNow(d.Residents);
-                else demand = DemandOf(Product(d.ProductId));
+                else
+                {
+                    SoftwareProduct product = Product(d.ProductId);
+                    demand = product != null && IsAiCompany(product.DevCompany) ? DemandOf(product) : 0;
+                }
                 d.EstimatedMbps = demand;
                 if (!IspNetwork.Processes.TryGetValue(d.Key, out IspProcess proc))
                 {
@@ -292,7 +304,9 @@ namespace ISPBusiness
                 if (!IsAiCompany(c)) return d.CompanyName + " is now owned by a player";
                 return null;
             }
-            if (Product(d.ProductId) != null) return null;
+            SoftwareProduct product = Product(d.ProductId);
+            if (product != null)
+                return IsAiCompany(product.DevCompany) ? null : "its owner is no longer an eligible AI customer";
             RefreshProducts(true);
             if (_products.Count == 0) return null; // market data not available: never treat that as "left the market"
             return Product(d.ProductId) == null ? "the product left the market" : null;
@@ -347,6 +361,12 @@ namespace ISPBusiness
             int day = now / (24 * 60);
             if (day != _lastDay) { _lastDay = day; RefreshOfferEstimates(); }
 
+        }
+
+        public static void BeforeHour()
+        {
+            GameSettings gs = GameSettings.Instance;
+            int now = GameClock.Stamp;
             int month = GameClock.MonthIndex;
             if (month != _lastMonth)
             {
@@ -370,8 +390,16 @@ namespace ISPBusiness
         private static void PayDirect(IspDeal d)
         {
             if (d.Unpaid <= 0) return;
-            GameSettings.Instance.MyCompany.MakeTransaction((float)d.Unpaid, Company.TransactionCategory.Deals, true, d.IsMunicipal ? BillMunicipal : Bill);
+            Company customer = d.IsMunicipal ? null : ClientOf(d);
+            if (!d.IsMunicipal && (customer == null || customer.Bankrupt || customer.Player))
+            {
+                d.Unpaid = 0;
+                return;
+            }
+            float amount = (float)d.Unpaid;
             d.Unpaid = 0;
+            if (customer != null) customer.MakeTransaction(-amount, Company.TransactionCategory.Deals, true, Bill);
+            GameSettings.Instance.MyCompany.MakeTransaction(amount, Company.TransactionCategory.Deals, true, d.IsMunicipal ? BillMunicipal : Bill);
         }
 
         /// <summary>vanilla Payout(): hands over what the deal earned since the last daily payment.</summary>

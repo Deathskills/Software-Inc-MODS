@@ -46,13 +46,48 @@ namespace ServerHostingBusiness
                 if (!SaveState.Offers.TryGetValue(__instance.ID, out int offered)) return;
                 if ((Clock.Stamp - offered) / (double)Clock.MinutesPerMonth > OfferLifetimeMonths) return;
                 SoftwareProduct p = __instance.Product;
-                if (p == null || p.ExternalHostingActive) return;
-                if (__instance.Performance <= 0f || __instance.Client == null) return;
+                if (p == null || p.ExternalHostingActive || SDateTime.GetMonths(p.Release, SDateTime.Now()) <= 24f) return;
+                if (__instance.Performance <= 0f || __instance.Client == null || __instance.Client.Bankrupt) return;
                 __result = true;
             }
             catch (Exception)
             {
             }
+        }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(DealWindow), "AddDeal", typeof(Deal), typeof(bool))]
+    public static class HostingOfferPricePatch
+    {
+        public static void Prefix(Deal deal, bool fromNetwork)
+        {
+            if (!Hooks.Enabled || fromNetwork || !ServerHostingBehaviour.CanPriceLocally()) return;
+            if (deal is ServerDeal hosting && hosting.Incoming && hosting.Product != null && !hosting.Active)
+                ServerHostingBehaviour.ApplyPrice(hosting);
+        }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(DealWindow), "AddDeal", typeof(Deal), typeof(SDateTime?), typeof(bool))]
+    public static class HostingScheduledOfferPricePatch
+    {
+        public static void Prefix(Deal deal, bool toEveryone)
+        {
+            if (toEveryone) HostingOfferPricePatch.Prefix(deal, false);
+        }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(ServerDeal), "GetDetailedDescription")]
+    public static class HostingOfferDetailsPatch
+    {
+        public static void Postfix(ServerDeal __instance, System.Collections.Generic.List<string> vars, System.Collections.Generic.List<string> values)
+        {
+            if (!Hooks.Enabled || __instance.Product == null) return;
+            float demand = __instance.Product.GetLoadRequirement().BandwidthFactor(SDateTime.Now());
+            float gross = __instance.PerPower * 1440f;
+            vars.Add("Projected monthly income");
+            values.Add((demand * gross).Currency());
+            vars.Add("Estimated monthly margin (ISP + power allowance)");
+            values.Add((demand * (gross - Server.GetISPCost() - (float)ServerHostingBehaviour.PowerPerMbpsMonth)).Currency());
         }
     }
 

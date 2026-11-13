@@ -247,8 +247,7 @@ namespace ISPBusiness
                 }
                 if (!st.SuitFiled && (st.LowMonths75 >= 5 || st.ZeroMonths >= 1))
                 {
-                    st.SuitFiled = true;
-                    Lawsuits.FileMunicipal(s, st.ZeroMonths >= 1, MyCoverage(s.Id));
+                    st.SuitFiled = Lawsuits.FileMunicipal(s, st.ZeroMonths >= 1, MyCoverage(s.Id));
                 }
                 st.MonthDemand = st.MonthDelivered = 0;
                 st.MonthHadCapacity = false;

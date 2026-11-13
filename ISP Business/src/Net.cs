@@ -33,7 +33,12 @@ namespace ISPBusiness
         private static readonly Dictionary<byte, float> GreetedAt = new Dictionary<byte, float>();
 
         private struct Incoming { public byte From; public string Name; public byte[] Data; }
-        private static readonly List<Incoming> Inbox = new List<Incoming>();
+        private static readonly object InboxLock = new object();
+        private const int MaxPacketBytes = 128;
+        private const int MaxQueuedPackets = 2048;
+        private static List<Incoming> Inbox = new List<Incoming>();
+        private static List<Incoming> Batch = new List<Incoming>();
+        private static float _nextRosterCheck;
 
         public static void Register()
         {
@@ -57,29 +62,30 @@ namespace ISPBusiness
 
         public static void ResetSession()
         {
+            _nextRosterCheck = 0f;
             Peers.Clear();
             Greeted.Clear();
             Warned.Clear();
             GreetedAt.Clear();
-            lock (Inbox) Inbox.Clear();
+            lock (InboxLock) Inbox.Clear();
         }
 
         // ---------- receive (may be called by the game's network code; handled on the main thread in Tick)
 
         public static void Receive(SINetworking.NetworkPlayer player, MemoryStream stream)
         {
-            if (player == null || stream == null) return;
+            if (player == null || player.Self || stream == null) return;
             try
             {
-                long start = stream.Position;
-                if (start >= stream.Length) start = 1; // self-delivery quirk: stream at its end, id byte at 0
-                int len = (int)(stream.Length - start);
-                if (len <= 0) return;
-                byte[] buf = new byte[len];
-                stream.Position = start;
-                int read = stream.Read(buf, 0, len);
-                if (read < len) Array.Resize(ref buf, read);
-                lock (Inbox) Inbox.Add(new Incoming { From = player.ID, Name = player.Name, Data = buf });
+                long remaining = stream.Length - stream.Position;
+                if (remaining <= 0 || remaining > MaxPacketBytes) return;
+                lock (InboxLock)
+                {
+                    if (Inbox.Count >= MaxQueuedPackets) return;
+                    var data = new byte[(int)remaining];
+                    if (stream.Read(data, 0, data.Length) != data.Length) return;
+                    Inbox.Add(new Incoming { From = player.ID, Name = player.Name, Data = data });
+                }
             }
             catch (Exception e)
             {
@@ -93,9 +99,22 @@ namespace ISPBusiness
             GameSettings gs = GameSettings.Instance;
             if (!Registered || gs == null || !gs.IsNetworkMode) return;
 
-            List<Incoming> batch;
-            lock (Inbox) { batch = Inbox.ToList(); Inbox.Clear(); }
-            foreach (Incoming m in batch) Handle(m);
+            lock (InboxLock)
+            {
+                List<Incoming> spare = Batch;
+                Batch = Inbox;
+                Inbox = spare;
+            }
+            foreach (Incoming m in Batch)
+            {
+                try { Handle(m); }
+                catch (Exception e) { Debug.LogWarning("[ISP Business] Ignored network message: " + e.Message); }
+            }
+            Batch.Clear();
+
+            float now = Time.realtimeSinceStartup;
+            if (now < _nextRosterCheck) return;
+            _nextRosterCheck = now + 1f;
 
             // Greet every player in the game once, and again after they leave and come back.
             var present = new HashSet<byte>();
@@ -132,9 +151,11 @@ namespace ISPBusiness
             switch (m.Data[0])
             {
                 case MsgHello:
+                    if (m.Data.Length < 10) break;
                     int protocol = ReadInt(m.Data, ref pos);
                     string version = ReadString(m.Data, ref pos);
-                    bool isReply = pos < m.Data.Length && m.Data[pos++] == 1;
+                    if (version.Length == 0 || pos != m.Data.Length - 1 || m.Data[pos] > 1) break;
+                    bool isReply = m.Data[pos] == 1;
                     Peers[m.From] = new KeyValuePair<int, string>(protocol, version);
                     if (protocol != Config.ProtocolVersion && Warned.Add(m.From))
                     {
@@ -147,21 +168,23 @@ namespace ISPBusiness
                     if (protocol == Config.ProtocolVersion) SendClaimsTo(m.From);
                     break;
                 case MsgClaim:
-                    if (!PeerCompatible(m.From)) break;
+                    if (!PeerCompatible(m.From) || m.Data.Length != 6 || m.Data[5] > 1) break;
                     uint product = (uint)ReadInt(m.Data, ref pos);
                     bool claim = pos < m.Data.Length && m.Data[pos++] == 1;
                     Deals.OnRemoteClaim(m.From, product, claim);
                     break;
                 case MsgCompanyClaim:
-                    if (!PeerCompatible(m.From)) break;
+                    if (!PeerCompatible(m.From) || m.Data.Length != 6 || m.Data[5] > 1) break;
                     uint company = (uint)ReadInt(m.Data, ref pos);
                     bool cclaim = pos < m.Data.Length && m.Data[pos++] == 1;
                     Deals.OnRemoteCompanyClaim(m.From, company, cclaim);
                     break;
                 case MsgCoverage:
-                    if (!PeerCompatible(m.From)) break;
+                    if (!PeerCompatible(m.From) || m.Data.Length != 13) break;
                     int settlement = ReadInt(m.Data, ref pos);
                     double residents = ReadDouble(m.Data, ref pos);
+                    if (Municipal.Get(settlement) == null || double.IsNaN(residents) || double.IsInfinity(residents)
+                        || residents < 0 || residents > Config.MuniPopulationCap || Math.Floor(residents) != residents) break;
                     Municipal.OnRemoteCoverage(m.From, settlement, residents);
                     break;
             }
@@ -263,7 +286,7 @@ namespace ISPBusiness
         public static string ReadString(byte[] d, ref int pos)
         {
             int n = ReadInt(d, ref pos);
-            if (n <= 0 || pos + n > d.Length) return "";
+            if (n <= 0 || n > d.Length - pos) return "";
             string s = Encoding.UTF8.GetString(d, pos, n); pos += n; return s;
         }
     }

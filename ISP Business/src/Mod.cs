@@ -96,8 +96,17 @@ namespace ISPBusiness
 
         // ---------- save data (each player's own local save; vanilla never sends it to other players)
 
+        private WriteDictionary _newerSave;
+        private static GameSettings _readOnlyGame;
+        public static bool IsReadOnlySave => _readOnlyGame != null && _readOnlyGame == GameSettings.Instance;
+
         public override void Serialize(WriteDictionary data, GameReader.LoadMode mode)
         {
+            if (IsReadOnlySave && _newerSave != null)
+            {
+                foreach (var entry in _newerSave) data[entry.Key] = entry.Value;
+                return;
+            }
             if (!Patched) return;
             data["ISP_Ver"] = Config.SaveVersion;
             data["ISP_Pools"] = IspNetwork.PackPools();
@@ -111,10 +120,15 @@ namespace ISPBusiness
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
         {
+            _newerSave = null;
+            _readOnlyGame = null;
             int ver = data.Get("ISP_Ver", 0);
             if (ver > Config.SaveVersion)
             {
-                Debug.LogError("[ISP Business] This save was made by a newer ISP Business (save version " + ver + "). ISP data was not loaded, and saving now will drop it.");
+                _newerSave = data;
+                _readOnlyGame = GameSettings.Instance;
+                _hasPending = false;
+                Debug.LogWarning("[ISP Business] This save requires a newer ISP Business. Its ISP data will be preserved.");
                 return;
             }
             _pendingPools = data.Get<string>("ISP_Pools", null);
@@ -135,7 +149,10 @@ namespace ISPBusiness
             IspNetwork.UnpackPools(_pendingPools);
             IspNetwork.UnpackAssign(_pendingAssign);
             if (_pendingAssign == null && IspNetwork.Pools.Count > 0)
-                IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool()); // save from milestone A
+            {
+                IspNetwork.Recalculate();
+                IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool());
+            }
             Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
             Municipal.UnpackStates(_pendingMuni);
             IspNetwork.UnpackStats(_pendingStats);
@@ -168,6 +185,7 @@ namespace ISPBusiness
                 }
 
                 if (!_iconTried) { _iconTried = true; _icon = LoadIcon(); }
+                if (IsReadOnlySave && _newerSave != null) return;
                 IspWindow.EnsureButton(_icon);
                 IspWindow.EnsureServerWindowColumn();
                 IspWindow.Tick();

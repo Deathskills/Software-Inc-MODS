@@ -44,7 +44,12 @@ namespace ISPBusiness
         /// <summary>"Offer" column, same unit as hosting deals: income per Mb per hour (monthly price / 24).</summary>
         public override float Worth() { return (float)(Data.Rate / 24.0); }
 
-        public override float Payout() { return Client != null ? Deals.TakeUnpaid(Data) : 0f; }
+        public override float Payout()
+        {
+            Company customer = Client;
+            return !Data.IsMunicipal && customer != null && !customer.Bankrupt && !customer.Player
+                && customer == Deals.ClientOf(Data) ? Deals.TakeUnpaid(Data) : 0f;
+        }
 
         public override float ReputationEffect(bool ending) { return ending ? Deals.CancelPenalty(Data) : 0f; }
 
@@ -101,6 +106,7 @@ namespace ISPBusiness
         public const uint IdBase = 0xF1000000u;
         private static readonly Dictionary<IspDeal, IspVanillaDeal> Shown = new Dictionary<IspDeal, IspVanillaDeal>();
         private static DealWindow _window;
+        private static float _nextSync;
 
         public static bool IsIspId(uint id) { return id >= IdBase; }
 
@@ -114,6 +120,7 @@ namespace ISPBusiness
         {
             Shown.Clear();
             _window = null;
+            _nextSync = 0;
         }
 
         private static DealWindow Window()
@@ -127,7 +134,10 @@ namespace ISPBusiness
         {
             DealWindow w = Window();
             if (w == null) return;
-            if (w != _window) { Shown.Clear(); _window = w; }
+            if (w != _window) { Shown.Clear(); _window = w; _nextSync = 0; }
+            float nowReal = Time.unscaledTime;
+            if (nowReal < _nextSync) return;
+            _nextSync = nowReal + 0.25f;
             GameSettings gs = GameSettings.Instance;
             if (gs == null || gs.MyCompany == null || gs.simulation == null) return;
             int now = GameClock.Stamp;

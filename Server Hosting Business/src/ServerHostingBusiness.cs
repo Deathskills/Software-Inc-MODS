@@ -164,7 +164,7 @@ namespace ServerHostingBusiness
             double isp = Server.GetISPCost();
             int stars = GameSettings.Instance.MyCompany.BusinessStars;
             double profit = Rates.Profit(cls) * Rates.StarFactor(stars);
-            double monthly = isp + PowerPerMbpsMonth + profit;
+            double monthly = MonthlyPricePerMbps(cls);
             // ServerDeal pays PerPower * 60 * 24 per Mbps per month.
             deal.PerPower = (float)(monthly / 1440.0);
             SaveState.Priced[deal.ID] = Clock.Stamp;
@@ -172,6 +172,8 @@ namespace ServerHostingBusiness
                 "[Server Hosting Business] Priced hosting for {0} ({1}): ISP ${2:F2} + power ${3:F2} + profit ${4:F2} ({5} stars) = ${6:F2} per Mbps per month, shown in the deal window as ${7:F2} (game dollars).",
                 deal.Product.Name, cls, isp, PowerPerMbpsMonth, profit, stars, monthly, deal.PerPower * 60f));
         }
+
+        public static bool CanPriceLocally() { return !IsClient(); }
 
         private static bool IsClient()
         {
@@ -181,7 +183,7 @@ namespace ServerHostingBusiness
 
         private void RepriceDeals()
         {
-            if (IsClient()) return;
+            if (IsClient() || (Patched && GameSettings.Instance.IsNetworkMode)) return;
             DealWindow dw = HUD.Instance.dealWindow;
             if (dw == null) return;
             List<Deal> deals;
@@ -232,6 +234,8 @@ namespace ServerHostingBusiness
             if (gs.Difficulty.Deals < 0.5f) { Debug.Log("[Server Hosting Business] Deals are turned off in this game's difficulty settings, so no hosting offers are sent."); return; }
             DealWindow dw = HUD.Instance.dealWindow;
             if (dw == null) return;
+            SDateTime? firstReception = DealWindow.FindReceptionTime();
+            if (!firstReception.HasValue) return;
             int needServers = 0, bigEnough = 0, sent = 0; float biggest = 0f;
 
             SDateTime now = SDateTime.Now();
@@ -261,7 +265,7 @@ namespace ServerHostingBusiness
 
             foreach (var c in candidates.OrderByDescending(x => x.Value))
             {
-                SDateTime? t = DealWindow.FindReceptionTime();
+                SDateTime? t = sent == 0 ? firstReception : DealWindow.FindReceptionTime();
                 if (!t.HasValue) { Debug.Log("[Server Hosting Business] No receptionist found, offers skipped."); break; }
                 var deal = new ServerDeal(c.Key);
                 ApplyPrice(deal);

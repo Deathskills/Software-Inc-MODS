@@ -18,7 +18,7 @@ namespace ISPBusiness
             return gs != null && gs.simulation != null ? gs.simulation.PublicDomain : null;
         }
 
-        public static void FileMunicipal(Settlement s, bool noService, double residents)
+        public static bool FileMunicipal(Settlement s, bool noService, double residents)
         {
             GameSettings gs = GameSettings.Instance;
             Company plaintiff = CityClient();
@@ -26,17 +26,18 @@ namespace ISPBusiness
             string why = noService
                 ? "you gave no ISP service there for a whole month"
                 : "your ISP service there has been under 75% for 5 months in a row";
-            IspNetwork.PendingNotices.Add(s.Name + " is suing you for negligence because " + why + ". The claim is " +
-                                          ((float)money).Currency() + ". The lawsuit arrives within a day: go to court with your lawyers or settle.");
-            if (gs == null || plaintiff == null) return;
+            if (gs == null || plaintiff == null) return false;
             try
             {
                 gs.LaunchSuit(new GameSettings.Lawsuit(plaintiff, "Negligence", money, 0.5f));
-                Debug.Log("[ISP Business] " + s.Name + " filed a lawsuit for " + money + " (" + why + ").");
+                IspNetwork.PendingNotices.Add(s.Name + " is suing you for negligence because " + why + ". The claim is " +
+                                              ((float)money).Currency() + ". The lawsuit arrives within a day: go to court with your lawyers or settle.");
+                return true;
             }
             catch (Exception e)
             {
                 Debug.LogError("[ISP Business] Could not file the municipal lawsuit: " + e.Message);
+                return false;
             }
         }
     }
