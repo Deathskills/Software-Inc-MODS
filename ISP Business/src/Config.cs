@@ -10,7 +10,7 @@ namespace ISPBusiness
 
         /// <summary>Network protocol version. Players must match to share ISP agreements.</summary>
         public const int ProtocolVersion = 1;
-        public const string ModVersion = "0.1.0";
+        public const string ModVersion = "0.2.0";
 
         /// <summary>Network id registered with the game for this mod's messages (first come, first served).</summary>
         public const byte NetworkId = 0xA7;
@@ -55,6 +55,40 @@ namespace ISPBusiness
             }
             return TransitRates[TransitRates.Length - 1];
         }
+
+        // ---- Corporate product ISP deals (spec 5.2, 5.4, 6, 13)
+        public const double CorporateReferencePrice = 11.45;   // $ per Mbps per month before the star multiplier
+        public const int ProductOffersPerMonth = 10;
+        public const double OfferLifetimeMonths = 24.0;
+        public const float MinOfferMbps = 1f;                  // products below this don't ask for ISP service
+        public const double DealEndMonths = 6.0;               // a deal ends once its product stays under MinOfferMbps this long
+
+        /// <summary>Vanilla business-star buckets: stars 0..6 roll a multiplier in [1.05 + s*w, 1.05 + (s+1)*w].</summary>
+        public static double StarMultiplier(int stars, double roll01)
+        {
+            const double lo = 1.05, hi = 1.25;
+            double w = (hi - lo) / 7.0;
+            int s = Math.Max(0, Math.Min(6, stars));
+            return lo + (s + Math.Max(0, Math.Min(1, roll01))) * w;
+        }
+
+        /// <summary>Monthly Performance change from the month's demand-weighted fulfilment (spec 13.3).</summary>
+        public static double PerformanceChange(double fulfilment)
+        {
+            if (fulfilment >= 0.9999) return 0.06;
+            if (fulfilment >= 0.98) return 0.03;
+            if (fulfilment >= 0.96) return 0.0;
+            if (fulfilment >= 0.95) return -0.02;
+            if (fulfilment >= 0.90) return -0.08;
+            return -0.20;
+        }
+
+        // Reputation per deal per month, in business stars, scaled by sqrt(Mbps / RepReferenceMbps) capped at 1.
+        // Vanilla hosting costs -0.1 for an overload; ISP uses the same order of size.
+        public const double RepReferenceMbps = 1000.0;
+        public const double RepGoodMonth = 0.01;     // fulfilment >= 98%
+        public const double RepBadMonth = -0.05;     // fulfilment < 90%
+        public const double RepCancel = -0.1;        // player cancels an active deal
 
         /// <summary>ISP profile of a vanilla server, or a 1:1 fallback for servers this mod doesn't know
         /// (modded furniture keeps its vanilla bandwidth and vanilla wattage per Mbps).</summary>

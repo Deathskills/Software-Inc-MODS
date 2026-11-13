@@ -1,8 +1,9 @@
-// ISP Business - Software Inc. code mod: run your own ISP (spec v0.7). Milestone A:
+// ISP Business - Software Inc. code mod: run your own ISP (spec v0.7). Milestones A and B:
 //  - switch vanilla server groups to ISP mode (ISP pools) with their own capacity and power use
 //  - your company's own internet traffic goes through your pools: vanilla ISP rate replaced by transit
 //  - idle ISP capacity draws little power and wears slowly
-//  - multiplayer: each player runs their own ISP; a version handshake prepares player agreements
+//  - AI products offer ISP deals each month; deals pay per delivered Mbps, with performance and reputation
+//  - multiplayer: each player runs their own ISP; version handshake and deal claims between players
 // Requires 0HarmonyLoader (Harmony 2.3.3). Without it the mod stays off.
 using System;
 using System.IO;
@@ -47,7 +48,8 @@ namespace ISPBusiness
         private Sprite _icon;
         private bool _iconTried;
 
-        private string _pendingPools;
+        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined;
+        private int _pendingNextId;
         private bool _hasPending;
 
         public override void OnActivate()
@@ -96,6 +98,10 @@ namespace ISPBusiness
             if (!Patched) return;
             data["ISP_Ver"] = Config.SaveVersion;
             data["ISP_Pools"] = IspNetwork.PackPools();
+            data["ISP_Assign"] = IspNetwork.PackAssign();
+            data["ISP_Deals"] = Deals.PackDeals();
+            data["ISP_Declined"] = Deals.PackDeclined();
+            data["ISP_NextId"] = Deals.NextId;
         }
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
@@ -107,6 +113,10 @@ namespace ISPBusiness
                 return;
             }
             _pendingPools = data.Get<string>("ISP_Pools", null);
+            _pendingAssign = data.Get<string>("ISP_Assign", null);
+            _pendingDeals = data.Get<string>("ISP_Deals", null);
+            _pendingDeclined = data.Get<string>("ISP_Declined", null);
+            _pendingNextId = data.Get("ISP_NextId", 1);
             _hasPending = true;
             if (_seenGame != null && _seenGame == GameSettings.Instance) ApplyPending();
         }
@@ -116,7 +126,11 @@ namespace ISPBusiness
             if (!_hasPending) return;
             _hasPending = false;
             IspNetwork.UnpackPools(_pendingPools);
-            _pendingPools = null;
+            IspNetwork.UnpackAssign(_pendingAssign);
+            if (_pendingAssign == null && IspNetwork.Pools.Count > 0)
+                IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool()); // save from milestone A
+            Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
+            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = null;
         }
 
         // ---------- main loop
@@ -135,6 +149,7 @@ namespace ISPBusiness
                 {
                     _seenGame = GameSettings.Instance;
                     IspNetwork.Reset();
+                    Deals.Reset();
                     Net.ResetSession();
                     IspWindow.Forget();
                     ApplyPending();

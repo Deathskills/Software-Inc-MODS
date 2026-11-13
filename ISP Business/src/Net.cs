@@ -19,6 +19,7 @@ namespace ISPBusiness
     public static class Net
     {
         public const byte MsgHello = 1;
+        public const byte MsgClaim = 2;   // product id + 1 = claim / 0 = release, decided by the sender
 
         public static ModController.DLLMod Mod;
         public static bool Registered;
@@ -118,6 +119,7 @@ namespace ISPBusiness
                 GreetedAt.Remove(id);
                 Peers.Remove(id);
                 Warned.Remove(id);
+                Deals.OnPlayerLeft(id);
             }
         }
 
@@ -140,8 +142,37 @@ namespace ISPBusiness
                     // Always answer a greeting (a reply is never answered), so a player who loads in later
                     // still learns about everyone already in the game.
                     if (!isReply) SendHello(m.From, true);
+                    if (protocol == Config.ProtocolVersion) SendClaimsTo(m.From);
+                    break;
+                case MsgClaim:
+                    if (!PeerCompatible(m.From)) break;
+                    uint product = (uint)ReadInt(m.Data, ref pos);
+                    bool claim = pos < m.Data.Length && m.Data[pos++] == 1;
+                    Deals.OnRemoteClaim(m.From, product, claim);
                     break;
             }
+        }
+
+        /// <summary>Tells every other player that we took (or released) the ISP deal for a product.</summary>
+        public static void BroadcastClaim(uint productId, bool claim)
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (!Registered || gs == null || !gs.IsNetworkMode) return;
+            try { Mod.SendNetworkMessage(ClaimBytes(productId, claim), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
+        }
+
+        private static void SendClaimsTo(byte target)
+        {
+            foreach (uint id in Deals.MyClaims().ToList()) Send(ClaimBytes(id, true), target);
+        }
+
+        private static byte[] ClaimBytes(uint productId, bool claim)
+        {
+            var b = new List<byte> { MsgClaim };
+            WriteInt(b, unchecked((int)productId));
+            b.Add(claim ? (byte)1 : (byte)0);
+            return b.ToArray();
         }
 
         public static bool PeerCompatible(byte playerId)

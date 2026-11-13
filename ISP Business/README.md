@@ -1,14 +1,20 @@
 # ISP Business
 
-A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This is **Milestone A: the ISP network core**.
+A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This version has **Milestone A (the ISP network core)** and **Milestone B (product ISP deals with AI companies)**.
 
-## What it does (Milestone A)
+## What it does
+
+**ISP Network window**
+- Open it from its button on the bottom bar. The counter on the button shows open ISP offers.
+- **Network tab:** all your server groups in the same table as the vanilla Servers window: status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback, Select fallback and View (moves the camera to the servers). A **Switch mode** button turns a group into an ISP pool or back to hosting.
+- Below the table are the ISP processes on the selected pool: your company's internet and one per ISP deal. Use **Move selected processes** to move them to another pool, like vanilla.
+- **Services tab:** ISP offers from AI companies (Accept / Decline) and your active ISP deals (delivered share, last month, Performance, price, earnings, pool, Change pool, Cancel).
 
 **ISP pools**
-- Open the **ISP Network** window from its button on the bottom bar.
 - Any of your server groups with nothing assigned to it can be switched to ISP mode. It's then an ISP pool.
 - A group is either a hosting group or an ISP pool, never both. If you assign a product to an ISP pool, it goes back to hosting mode and you get a message.
-- Server failure works exactly like vanilla: if one server in a pool breaks, the whole pool is down. Repair it with IT staff as usual.
+- Failure and fallback work exactly like vanilla. If one server in a pool breaks, the whole pool is down, and its ISP processes follow the pool's fallback group. Only an ISP pool can carry ISP traffic, so if the fallback is a hosting group, or there's no fallback, the traffic isn't served.
+- If a pool carries more than its capacity, every process on it gets the same share of what's available.
 
 **ISP capacity and power**
 
@@ -25,15 +31,29 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 - Server furniture from other mods keeps its own bandwidth and wattage in ISP mode.
 
 **Your own internet through your ISP**
-- Each hour, your company's internet traffic (the vanilla "Internet" bill) is carried by your ISP pools, up to their capacity.
+- Your company's internet is an ISP process. Your first pool picks it up automatically, and you can move it.
+- Each hour, the traffic on your vanilla "Internet" bill (released products, hosting deals and your store; projects in development don't use the internet) is carried by that pool, up to its capacity.
 - Traffic your pools carry costs wholesale transit instead of the vanilla ISP rate. Transit starts at $0.50 per Mbps per month in 1980 and falls to $0.05 in 2050.
 - Traffic above your capacity, or while your pools are down, is billed by the vanilla ISP as usual.
 - There's no fake income: you only save money, and you still pay the electricity for your ISP servers.
 - Costs are the same per month whatever days-per-month setting you play with.
 
+**ISP deals with AI companies**
+- Each month, up to 10 AI products that need at least 1 Mbps offer you an ISP deal, ranked by value. You need a receptionist, and deals must be on in the difficulty settings.
+- Price: $11.45 per Mbps per month × the vanilla business-star multiplier (1.05 at 0 stars up to 1.25 at 6 stars). It's locked when the offer is made.
+- Offers stay open for 24 months. A declined product isn't offered again for 6 months.
+- An accepted deal goes to the pool with the most spare capacity. You're paid every hour for the Mbps you actually deliver, and you pay transit on it.
+- Its bandwidth follows the product's live users, including the bandwidth curves of Server Hosting Business if you use it.
+- Performance starts at 1.0 and changes every month with the share you delivered: +0.06 at 100%, +0.03 from 98%, 0 from 96%, −0.02 from 95%, −0.08 from 90%, −0.20 below 90%. At 0 the customer cancels.
+- Good months (98%+) raise business reputation and bad months (under 90%) lower it, scaled by deal size. Cancelling a deal yourself also costs reputation.
+- A deal ends without penalty when the product leaves the market or needs under 1 Mbps for 6 months.
+- Hosting and ISP are separate: a product can have a hosting deal and an ISP deal at the same time.
+
 **Multiplayer**
 - Each player runs their own ISP for their own company. No extra syncing is needed, because the game simulates each player's servers and bills on their own machine.
-- The mod checks which players run it, and which version. Agreements between players come in a later milestone.
+- The mod checks which players run it, and which version.
+- When you accept an ISP deal, the other players are told, so they aren't offered that product and can't hold it at the same time. If two players accept at the same moment, the lower player number keeps it and the other deal is withdrawn without penalty.
+- Agreements between players come in a later milestone.
 - A player without the mod plays normally.
 
 ## Requirements and install
@@ -50,7 +70,7 @@ Without 0HarmonyLoader the mod stays off.
   - `TimeOfDay.UpdateHour`
   - `ServerGroup.RefreshUsage`
   - `GameSettings.ChangeServerName`
-- **Server Hosting Business:** compatible. The two mods patch different methods. This mod never changes `Server.GetISPCost` (which hosting prices use), hosting deals, product bandwidth or the deal list.
+- **Server Hosting Business:** compatible. The two mods patch different methods. This mod never changes `Server.GetISPCost` (which hosting prices use), hosting deals, product bandwidth or the vanilla deal list. ISP deals only read product bandwidth, so they follow Server Hosting Business's curves when it's installed.
 - **Realistic Population growth:** compatible. Nothing population-related is touched.
 - Uses none of the namespaces or types the game blocks for mods, so it doesn't need the "all access" prompt.
 - ISP data is stored only as text in the save's mod data, and no custom objects go into the save. Removing the mod returns ISP pools to normal server groups.

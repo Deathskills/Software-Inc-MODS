@@ -1,13 +1,16 @@
-// ISP Business - ISP pools on vanilla server groups (spec sections 3, 4, 5.6).
+// ISP Business - ISP pools on vanilla server groups (spec sections 3, 4, 5.6, 13).
 //
-// An ISP pool is a vanilla server group that the player switched to ISP mode in the ISP window.
+// An ISP pool is a vanilla server group that the player switched to ISP mode.
 //  - Its servers give ISP capacity (Config.Servers) instead of hosting capacity.
 //  - It can't host products: if items get assigned to it, it goes back to hosting mode.
-//  - Failure is vanilla: one broken server sets the group's PowerSum to 0, so the whole pool is down.
-//    Its traffic then moves to the other ISP pools that are up, or back to the vanilla ISP.
-//  - Each hour, the company's own internet traffic (the vanilla "Internet" bill) is served by its pools
-//    up to their capacity. Served traffic is refunded from the vanilla bill and replaced by wholesale
-//    transit. Electricity comes from the servers themselves, at the ISP watts per Mbps.
+//  - ISP traffic is split into "ISP processes", like vanilla server processes: your company's own
+//    internet, and one per ISP deal. Each process is assigned to a pool.
+//  - Failure and fallback are vanilla: one broken server sets the group's PowerSum to 0, so the whole
+//    pool is down, and its processes follow the group's fallback chain to the first group that is up.
+//    If that group is not an ISP pool (or there is none), the traffic is not served.
+//  - A pool carrying more than its capacity is overloaded: every process on it gets the same share.
+//  - Own internet that your pools carry is refunded from the vanilla "Internet" bill and replaced by
+//    wholesale transit. Deal traffic pays transit too. Electricity comes from the servers themselves.
 // Every player runs this for their own company only: in multiplayer each game simulates its own
 // servers and bills, and vanilla broadcasts the resulting transactions.
 using System;
@@ -26,22 +29,42 @@ namespace ISPBusiness
         public int ServerCount;
         public double Capacity;     // ISP Mbps available now (0 when down)
         public double Installed;    // ISP Mbps if every server worked
-        public double Assigned;     // Mbps carried in the last hour
+        public double Load;         // Mbps of the processes routed here in the last hour
+        public double Assigned;     // Mbps actually carried (min of Load and Capacity)
         public double Utilisation;  // Assigned / Capacity
         public double Watts;        // ISP electricity draw at the current load
+        public bool Overloaded { get { return Up && Load > Capacity + 1e-9; } }
+    }
+
+    /// <summary>One stream of ISP traffic: your own internet, or one deal.</summary>
+    public sealed class IspProcess
+    {
+        public string Key;          // "own" or "deal:<id>"
+        public string Label;
+        public double Demand;       // Mbps wanted in the last hour
+        public double Delivered;    // Mbps delivered in the last hour
+        public string ServedBy;     // pool that actually carried it (after fallback), or null
+        public string Pool { get { return IspNetwork.GetAssignment(Key); } }
     }
 
     public static class IspNetwork
     {
+        public const string OwnKey = "own";
+
         /// <summary>Names of the vanilla server groups in ISP mode. Saved with the game.</summary>
         public static readonly HashSet<string> Pools = new HashSet<string>();
+
+        /// <summary>Process key -> pool name. Saved with the game.</summary>
+        private static readonly Dictionary<string, string> Assign = new Dictionary<string, string>();
 
         /// <summary>Per-pool runtime figures from the last hour (not saved, rebuilt every hour).</summary>
         public static readonly Dictionary<string, PoolState> State = new Dictionary<string, PoolState>();
 
-        // Last-hour and this-month figures for the ISP window.
-        public static double LastDemandMbps, LastServedMbps;
-        public static double MonthSavings, MonthTransit, LastMonthSavings, LastMonthTransit;
+        /// <summary>Processes from the last hour, for the window (rebuilt every hour).</summary>
+        public static readonly Dictionary<string, IspProcess> Processes = new Dictionary<string, IspProcess>();
+
+        // This-month figures for the window.
+        public static double MonthSavings, MonthTransit, MonthRevenue, LastMonthSavings, LastMonthTransit, LastMonthRevenue;
         private static int _statsMonth = int.MinValue;
 
         /// <summary>Messages to show the player on the next frame (not from inside the hourly tick).</summary>
@@ -50,14 +73,16 @@ namespace ISPBusiness
         public static void Reset()
         {
             Pools.Clear();
+            Assign.Clear();
             State.Clear();
-            LastDemandMbps = LastServedMbps = 0;
-            MonthSavings = MonthTransit = LastMonthSavings = LastMonthTransit = 0;
+            Processes.Clear();
+            MonthSavings = MonthTransit = MonthRevenue = LastMonthSavings = LastMonthTransit = LastMonthRevenue = 0;
             _statsMonth = int.MinValue;
             PendingNotices.Clear();
+            Own();
         }
 
-        // ---------- pool membership
+        // ---------- pools
 
         public static bool IsPool(ServerGroup g)
         {
@@ -70,7 +95,7 @@ namespace ISPBusiness
             if (g == null) return "This server group no longer exists.";
             if (g.CloudProvider > 0) return "Another player's cloud can't be an ISP pool.";
             if (g.IsCloud) return "This group is your multiplayer cloud. Stop the cloud service first.";
-            if (g.Items.Count > 0) return "Move the products and other items off this group first. A server group can either host or be an ISP pool, not both.";
+            if (g.Items.Count > 0) return "Move the processes off this group first (Servers window). A server group can either host or be an ISP pool, not both.";
             if (!g.Servers.OfType<Server>().Any()) return "This group has no server furniture.";
             return null;
         }
@@ -84,13 +109,17 @@ namespace ISPBusiness
                 error = CannotBePool(g);
                 if (error != null) return false;
                 Pools.Add(g.Name);
-                RecalculatePools(LastServedMbps);
+                // The first pool picks up your own internet, so switching a group on does something right away.
+                if (GetAssignment(OwnKey) == null) Assign[OwnKey] = g.Name;
+                Recalculate();
                 ApplyPower();
                 return true;
             }
             Pools.Remove(g.Name);
             State.Remove(g.Name);
             RestoreVanilla(g);
+            Recalculate();
+            ApplyPower();
             return true;
         }
 
@@ -114,9 +143,44 @@ namespace ISPBusiness
 
         public static void Rename(string oldName, string newName)
         {
-            if (oldName == null || newName == null || !Pools.Remove(oldName)) return;
+            if (oldName == null || newName == null) return;
+            foreach (string k in Assign.Where(kv => kv.Value == oldName).Select(kv => kv.Key).ToList()) Assign[k] = newName;
+            if (!Pools.Remove(oldName)) return;
             Pools.Add(newName);
             if (State.TryGetValue(oldName, out PoolState st)) { State.Remove(oldName); st.Name = newName; State[newName] = st; }
+        }
+
+        // ---------- process assignment
+
+        /// <summary>Pool a process is assigned to, or null if it isn't assigned to an existing pool.</summary>
+        public static string GetAssignment(string key)
+        {
+            return key != null && Assign.TryGetValue(key, out string p) && Pools.Contains(p) ? p : null;
+        }
+
+        public static void SetAssignment(string key, string pool)
+        {
+            if (pool == null || !Pools.Contains(pool)) Assign.Remove(key);
+            else Assign[key] = pool;
+        }
+
+        public static void RemoveProcess(string key)
+        {
+            Assign.Remove(key);
+            Processes.Remove(key);
+        }
+
+        /// <summary>The pool with the most spare capacity, for a newly accepted deal.</summary>
+        public static string BestPool()
+        {
+            string best = null; double spare = double.MinValue;
+            foreach (PoolState st in State.Values)
+            {
+                double s = st.Installed - st.Load;
+                if (s > spare) { spare = s; best = st.Name; }
+            }
+            if (best == null && Pools.Count > 0) best = Pools.OrderBy(x => x, StringComparer.Ordinal).First();
+            return best;
         }
 
         // ---------- hourly tick (Harmony postfix on TimeOfDay.UpdateHour)
@@ -128,32 +192,42 @@ namespace ISPBusiness
             GameSettings gs = GameSettings.Instance;
             if (gs == null || gs.MyCompany == null) return;
 
-            int dpm = Math.Max(1, GameSettings.DaysPerMonth);
-            double hoursPerMonth = 24.0 * dpm;
+            double hoursPerMonth = GameClock.HoursPerMonth;
             double ispRate = Server.GetISPCost();            // vanilla $ per Mbps per month
-            double year = GameClock.Year;
+            double transitRate = Config.TransitRate(GameClock.Year);
 
             RollMonth();
 
             // The company's own internet traffic this hour, in Mbps, from what vanilla billed for it.
-            double demand = internetCostThisHour > 0 && ispRate > 0 ? internetCostThisHour / (ispRate / hoursPerMonth) : 0;
+            IspProcess own = Own();
+            own.Demand = internetCostThisHour > 0 && ispRate > 0 ? internetCostThisHour / (ispRate / hoursPerMonth) : 0;
 
-            double capacity = RecalculatePools(demand);
-            double served = Math.Min(demand, capacity);
+            Deals.RefreshDemand();
+            Recalculate();
 
-            if (served > 0)
+            if (own.Delivered > 0)
             {
-                double refund = served * ispRate / hoursPerMonth;
-                double transit = served * Config.TransitRate(year) / hoursPerMonth;
+                double refund = own.Delivered * ispRate / hoursPerMonth;
+                double transit = own.Delivered * transitRate / hoursPerMonth;
                 // ServerCost is paid by vanilla as the monthly "Internet" bill. Swapping the vanilla rate
                 // for transit here keeps one bill line and survives save/load (ServerCost is saved).
                 gs.ServerCost = (float)Math.Max(0.0, gs.ServerCost - refund + transit);
                 MonthSavings += refund - transit;
                 MonthTransit += transit;
             }
-            LastDemandMbps = demand;
-            LastServedMbps = served;
+
+            Deals.OnHour(hoursPerMonth, transitRate);
             ApplyPower();
+        }
+
+        public static IspProcess Own()
+        {
+            if (!Processes.TryGetValue(OwnKey, out IspProcess own))
+            {
+                own = new IspProcess { Key = OwnKey, Label = "Your company's internet" };
+                Processes[OwnKey] = own;
+            }
+            return own;
         }
 
         private static void RollMonth()
@@ -164,24 +238,25 @@ namespace ISPBusiness
             {
                 LastMonthSavings = MonthSavings;
                 LastMonthTransit = MonthTransit;
+                LastMonthRevenue = MonthRevenue;
             }
-            MonthSavings = MonthTransit = 0;
+            MonthSavings = MonthTransit = MonthRevenue = 0;
             _statsMonth = month;
         }
 
-        /// <summary>Rebuilds every pool's capacity and spreads <paramref name="demand"/> over the pools that are up.
-        /// Returns the total capacity available.</summary>
-        public static double RecalculatePools(double demand)
+        /// <summary>Rebuilds every pool's capacity, routes every process (with vanilla fallback)
+        /// and sets each process's delivered Mbps. Uses the demand already stored on the processes.</summary>
+        public static void Recalculate()
         {
             GameSettings gs = GameSettings.Instance;
-            if (gs == null) return 0;
+            if (gs == null) return;
 
             foreach (string name in Pools.ToList())
             {
                 ServerGroup g = gs.GetServerGroup(name);
                 if (g == null)
                 {
-                    // Group gone (all its servers sold or deleted). Vanilla behaviour: nothing left to serve.
+                    // Group gone (all its servers sold or deleted): nothing left to serve from it.
                     Pools.Remove(name);
                     State.Remove(name);
                     continue;
@@ -191,22 +266,48 @@ namespace ISPBusiness
                     Pools.Remove(name);
                     State.Remove(name);
                     RestoreVanilla(g);
-                    PendingNotices.Add("Server group \"" + name + "\" was given products or other items to host, so it left ISP mode. A server group can either host or be an ISP pool, not both.");
+                    PendingNotices.Add("Server group \"" + name + "\" was given processes to host, so it left ISP mode. Its ISP traffic is no longer served. A server group can either host or be an ISP pool, not both.");
                     continue;
                 }
                 if (!State.TryGetValue(name, out PoolState st)) { st = new PoolState { Name = name }; State[name] = st; }
                 Measure(g, st);
+                st.Load = 0;
             }
 
-            double total = 0;
-            foreach (PoolState st in State.Values) total += st.Capacity;
-            double served = Math.Min(demand, total);
+            // Route each process to the pool that serves it.
+            foreach (IspProcess p in Processes.Values)
+            {
+                p.ServedBy = Route(gs, p.Pool);
+                if (p.ServedBy != null) State[p.ServedBy].Load += p.Demand;
+            }
             foreach (PoolState st in State.Values)
             {
-                st.Assigned = total > 0 ? served * st.Capacity / total : 0;
-                st.Utilisation = st.Capacity > 0 ? Math.Min(1.0, st.Assigned / st.Capacity) : 0;
+                st.Assigned = Math.Min(st.Load, st.Capacity);
+                st.Utilisation = st.Capacity > 0 ? st.Assigned / st.Capacity : 0;
             }
-            return total;
+            foreach (IspProcess p in Processes.Values)
+            {
+                if (p.ServedBy == null) { p.Delivered = 0; continue; }
+                PoolState st = State[p.ServedBy];
+                double share = st.Load > 0 ? Math.Min(1.0, st.Capacity / st.Load) : 1.0;
+                p.Delivered = p.Demand * share;
+            }
+        }
+
+        /// <summary>Vanilla fallback: a group that is down hands its load to its fallback chain.</summary>
+        private static string Route(GameSettings gs, string pool)
+        {
+            if (pool == null) return null;
+            ServerGroup g = gs.GetServerGroup(pool);
+            var seen = new HashSet<string>();
+            while (g != null && seen.Add(g.Name))
+            {
+                if (g.PowerSum > 0f && !g.Broken)
+                    return IsPool(g) && State.TryGetValue(g.Name, out PoolState st) && st.Up ? g.Name : null;
+                if (g.Fallback == null) return null;
+                g = gs.GetServerGroup(g.Fallback);
+            }
+            return null;
         }
 
         private static void Measure(ServerGroup g, PoolState st)
@@ -258,39 +359,74 @@ namespace ISPBusiness
 
         // ---------- save data (local save of each player, like vanilla server groups)
 
-        private const char Sep = '\u001F';
-
         public static string PackPools()
         {
-            return string.Join(Sep.ToString(), Pools.OrderBy(x => x, StringComparer.Ordinal).ToArray());
+            return Pack.List(Pools.OrderBy(x => x, StringComparer.Ordinal));
         }
 
         public static void UnpackPools(string s)
         {
             Pools.Clear();
             State.Clear();
-            if (string.IsNullOrEmpty(s)) return;
-            foreach (string name in s.Split(Sep))
-                if (name.Length > 0) Pools.Add(name);
+            foreach (string name in Pack.Unlist(s)) if (name.Length > 0) Pools.Add(name);
+        }
+
+        public static string PackAssign()
+        {
+            return Pack.List(Assign.Select(kv => kv.Key + Pack.Field + kv.Value));
+        }
+
+        public static void UnpackAssign(string s)
+        {
+            Assign.Clear();
+            foreach (string rec in Pack.Unlist(s))
+            {
+                string[] f = rec.Split(Pack.Field);
+                if (f.Length == 2 && f[0].Length > 0) Assign[f[0]] = f[1];
+            }
         }
 
         public static string Describe(double mbps)
         {
-            if (mbps >= 1000000) return (mbps / 1000000).ToString("0.##", CultureInfo.InvariantCulture) + " Tbps";
-            if (mbps >= 1000) return (mbps / 1000).ToString("0.##", CultureInfo.InvariantCulture) + " Gbps";
-            return mbps.ToString("0.##", CultureInfo.InvariantCulture) + " Mbps";
+            return ((float)mbps).Bandwidth();
         }
+    }
+
+    /// <summary>Text packing for save data: records split by \u001E, fields by \u001F.</summary>
+    public static class Pack
+    {
+        public const char Record = '\u001E';
+        public const char Field = '\u001F';
+
+        public static string List(IEnumerable<string> items)
+        {
+            return string.Join(Record.ToString(), items.ToArray());
+        }
+
+        public static IEnumerable<string> Unlist(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return new string[0];
+            return s.Split(Record);
+        }
+
+        public static string D(double v) { return v.ToString("R", CultureInfo.InvariantCulture); }
+        public static double D(string s) { double v; return double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out v) ? v : 0; }
+        public static string L(long v) { return v.ToString(CultureInfo.InvariantCulture); }
+        public static long L(string s) { long v; return long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out v) ? v : 0; }
     }
 
     /// <summary>In-game date helpers (same conversion as vanilla Utilities.BandwidthFactor).</summary>
     public static class GameClock
     {
         public static int Stamp { get { return SDateTime.Now().ToInt(); } }
-        public static int MinutesPerMonth { get { return Math.Max(1, GameSettings.DaysPerMonth) * 24 * 60; } }
+        public static int DaysPerMonth { get { return Math.Max(1, GameSettings.DaysPerMonth); } }
+        public static double HoursPerMonth { get { return 24.0 * DaysPerMonth; } }
+        public static int MinutesPerMonth { get { return DaysPerMonth * 24 * 60; } }
         public static int MonthIndex { get { return Stamp / MinutesPerMonth; } }
+        public static double MonthsBetween(int fromStamp, int toStamp) { return (toStamp - fromStamp) / (double)MinutesPerMonth; }
         public static double Year
         {
-            get { return SDateTime.BaseYear + Stamp / 12.0 / Math.Max(1, GameSettings.DaysPerMonth) / 24.0 / 60.0; }
+            get { return SDateTime.BaseYear + Stamp / 12.0 / DaysPerMonth / 24.0 / 60.0; }
         }
     }
 }
