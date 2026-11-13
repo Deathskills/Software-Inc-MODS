@@ -41,7 +41,8 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 - Costs are the same per month whatever days-per-month setting you play with.
 
 **Municipal ISP (towns)**
-- Eight settlements (3 rural, 3 towns, 2 cities) with their own population, separate from the game's: rural 2,500, town 10,000 and city 50,000 people in 1980, growing to 40 million by 2080, 2065 and 2050. Nothing vanilla is changed.
+- Three settlements, one of each: Maple Hollow (rural), Riverton (town) and Port Haven (city), with their own population, separate from the game's: rural 2,500, town 10,000 and city 50,000 people in 1980, growing to 40 million by 2080, 2065 and 2050. Nothing vanilla is changed.
+- Only the settlement that matches the map you chose when creating the game (Rural, Town or City) makes offers. In multiplayer everyone shares the host's map, so it's the same settlement for all players.
 - Town offers arrive in the Deals window: a small first deal (100 / 200 / 300 residents), then expansions at 3, 6, 9 and 12 months (up to 2x, 4x, 8x, then the whole available population), and growth offers every 6 to 12 months after that. Expansions need 90%+ service there last month.
 - Bandwidth: residents x internet adoption (5% in 1980, 70% in 2020, 100% in 2080) x data per user per month (1 MB in 1980 up to 740 GB in 2080) x 8 / 2,592,000 seconds. It's tiny in the 1980s, so towns also pay a coverage payment.
 - Pay: delivered Mbps x $5.06 x the star multiplier, plus a coverage payment per town of $1,000 + $25 x the square root of the residents you cover there, a month. It's worked out once on all your coverage in that town, so many small deals don't stack, and it's only paid for the share of traffic you actually deliver. Paid under Deals as "ISP municipal".

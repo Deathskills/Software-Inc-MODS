@@ -226,14 +226,17 @@ namespace ISPBusiness
               .Append("   <b>Coverage pay at full service:</b> ").Append(Money(pay)).Append(" a month")
               .Append("   <b>Internet users:</b> ").Append((Municipal.Adoption(year) * 100).ToString("0.0", CultureInfo.InvariantCulture)).Append("% of residents")
               .Append("   <b>Use per user:</b> ").Append(Municipal.UsageMBPerUser(year) >= 1000 ? (Municipal.UsageMBPerUser(year) / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageMBPerUser(year).ToString("0.#", CultureInfo.InvariantCulture) + " MB").Append(" a month\n");
+            Settlement home = Municipal.Settlements.FirstOrDefault(Municipal.OnMap);
+            if (home != null) sb.Append("<b>Your map:</b> ").Append(home.TypeName).Append(", so offers come from ").Append(home.Name).Append('\n');
             sb.Append("<i>Town offers come through the Deals window: a small first deal, then bigger ones at 3, 6, 9 and 12 months if your service there stays above 90%. ")
               .Append("Coverage pay is only paid for the traffic you actually deliver. Under 90% for 3 months brings a breach notice; under 75% for 5 months, or a month with no service, a lawsuit. ")
               .Append("Consolidate merges your deals in a town into one.</i>");
             _townSummary.text = sb.ToString();
-            if (_towns.Items.Count != Municipal.Settlements.Length)
+            List<Settlement> shown = Municipal.Shown().ToList();
+            if (_towns.Items.Count != shown.Count || shown.Any(s => !_towns.Items.Contains(s)))
             {
                 _towns.Items.Clear();
-                _towns.Items.AddRange(Municipal.Settlements.Cast<object>());
+                _towns.Items.AddRange(shown.Cast<object>());
             }
         }
 

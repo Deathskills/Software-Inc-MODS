@@ -1,6 +1,8 @@
 // ISP Business - municipal ISP (spec 5.3, 8-12, 14; Milestone D).
 //
-//  - A fixed set of settlements (rural, town, city) with their own population, independent of vanilla:
+//  - Three settlements (one rural, one town, one city) with their own population, independent of vanilla.
+//    Only the one matching the map chosen when the game was created (GameSettings.EnvType: Rural, Town or
+//    City) makes offers; it's the same map for every player in multiplayer.
 //    Population(year) = min(40M, initial x (1 + g)^(year - 1980)), g reaching 40M in the target year.
 //    Nothing vanilla (labour, market size, population) is read or changed.
 //  - Coverage deals: a settlement contracts you to serve a number of residents. Your first deal there is
@@ -49,16 +51,12 @@ namespace ISPBusiness
 
     public static class Municipal
     {
+        // One of each. Ids stay fixed (they're in saves and multiplayer messages).
         public static readonly Settlement[] Settlements =
         {
             new Settlement { Id = 1, Name = "Maple Hollow", Type = 0 },
-            new Settlement { Id = 2, Name = "Cedar Creek",  Type = 0 },
-            new Settlement { Id = 3, Name = "Pine Ridge",   Type = 0 },
             new Settlement { Id = 4, Name = "Riverton",     Type = 1 },
-            new Settlement { Id = 5, Name = "Brookfield",   Type = 1 },
-            new Settlement { Id = 6, Name = "Fairview",     Type = 1 },
             new Settlement { Id = 7, Name = "Port Haven",   Type = 2 },
-            new Settlement { Id = 8, Name = "Northgate",    Type = 2 },
         };
 
         public static readonly Dictionary<int, SettlementState> States = new Dictionary<int, SettlementState>();
@@ -73,6 +71,22 @@ namespace ISPBusiness
         }
 
         public static Settlement Get(int id) { return Settlements.FirstOrDefault(s => s.Id == id); }
+
+        /// <summary>Map type chosen at game creation: 0 rural, 1 town, 2 city (saved by vanilla, shared in multiplayer).</summary>
+        public static int MapType
+        {
+            get
+            {
+                GameSettings gs = GameSettings.Instance;
+                return gs != null ? (int)gs.EnvType : 1;
+            }
+        }
+
+        /// <summary>The settlement of this game's map: the only one that makes offers.</summary>
+        public static bool OnMap(Settlement s) { return s != null && s.Type == MapType; }
+
+        /// <summary>Settlements to show: the map's, plus any you still have deals in.</summary>
+        public static IEnumerable<Settlement> Shown() { return Settlements.Where(s => OnMap(s) || MyCoverage(s.Id) > 0); }
 
         public static SettlementState State(int id)
         {
@@ -217,6 +231,7 @@ namespace ISPBusiness
             var rng = new System.Random(now);
             foreach (Settlement s in Settlements.OrderBy(x => rng.Next()))
             {
+                if (!OnMap(s)) continue;
                 if (Deals.Offers.Any(o => o.IsMunicipal && o.Settlement == s.Id)) continue;
                 if (recentlyDeclined("m:" + s.Id, now)) continue;
                 double available = Available(s.Id);
