@@ -20,14 +20,14 @@ namespace ISPBusiness
 
         public static void BeforeHour()
         {
-            if (!Enabled) return;
+            if (!Enabled || IspBehaviour.IsReadOnlySave) return;
             try { _serverCostBefore = GameSettings.Instance != null ? GameSettings.Instance.ServerCost : 0f; }
             catch (Exception) { _serverCostBefore = 0f; }
         }
 
         public static void AfterHour()
         {
-            if (!Enabled) return;
+            if (!Enabled || IspBehaviour.IsReadOnlySave) return;
             try
             {
                 GameSettings gs = GameSettings.Instance;
@@ -43,7 +43,7 @@ namespace ISPBusiness
 
         public static void AfterRefreshUsage(ServerGroup g)
         {
-            if (!Enabled || g == null) return;
+            if (!Enabled || IspBehaviour.IsReadOnlySave || g == null) return;
             try
             {
                 if (IspNetwork.IsPool(g) && IspNetwork.State.TryGetValue(g.Name, out PoolState st))
@@ -57,7 +57,7 @@ namespace ISPBusiness
 
         public static void AfterRename(object[] args)
         {
-            if (!Enabled || args == null || args.Length < 2) return;
+            if (!Enabled || IspBehaviour.IsReadOnlySave || args == null || args.Length < 2) return;
             try { IspNetwork.Rename(args[0] as string, args[1] as string); }
             catch (Exception e) { ReportError("pool rename", e); }
         }

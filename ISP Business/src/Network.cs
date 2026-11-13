@@ -181,15 +181,18 @@ namespace ISPBusiness
         /// <summary>The pool with the most spare capacity, for a newly accepted deal.</summary>
         public static string BestPool()
         {
+            var fallbackTargets = new HashSet<string>(GameSettings.Instance.GetAllServerGroups()
+                .Select(group => group.Fallback).Where(name => name != null), StringComparer.Ordinal);
             string best = null; double spare = double.MinValue;
             foreach (PoolState st in State.Values)
             {
-                double s = st.Installed - st.Load;
+                if (!st.Up || fallbackTargets.Contains(st.Name)) continue;
+                double s = st.Capacity - st.Load;
                 if (s > spare) { spare = s; best = st.Name; }
             }
-            if (best == null && Pools.Count > 0) best = Pools.OrderBy(x => x, StringComparer.Ordinal).First();
             return best;
         }
+
 
         // ---------- hourly tick (Harmony postfix on TimeOfDay.UpdateHour)
 
@@ -205,6 +208,7 @@ namespace ISPBusiness
             double transitRate = Config.TransitRate(GameClock.Year);
 
             RollMonth();
+            Deals.BeforeHour();
 
             // The company's own internet traffic this hour, in Mbps, from what vanilla billed for it.
             IspProcess own = Own();
@@ -319,10 +323,18 @@ namespace ISPBusiness
                 st.Load = 0;
             }
 
-            // Route each process to the pool that serves it.
+            // Processes assigned to the same pool follow the same fallback chain.
+            var routes = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (IspProcess p in Processes.Values)
             {
-                p.ServedBy = Route(gs, p.Pool);
+                string pool = p.Pool;
+                p.ServedBy = null;
+                if (pool != null)
+                {
+                    if (!routes.TryGetValue(pool, out string destination))
+                        routes[pool] = destination = Route(gs, pool);
+                    p.ServedBy = destination;
+                }
                 if (p.ServedBy != null) State[p.ServedBy].Load += p.Demand;
             }
             foreach (PoolState st in State.Values)

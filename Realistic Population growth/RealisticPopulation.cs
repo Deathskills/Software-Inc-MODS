@@ -51,6 +51,10 @@ public class RealisticPopulationBehaviour : ModBehaviour
 
     private static double _scale = -1;
     private bool _active;
+    private GameSettings _game;
+    private MarketSimulation _market;
+    private uint? _previousPopulation;
+    private uint _lastPopulation;
     private int _lastStamp = int.MinValue;
 
     private static double RealAt(double year)
@@ -88,7 +92,11 @@ public class RealisticPopulationBehaviour : ModBehaviour
     public override void OnDeactivate()
     {
         _active = false;
-        MarketSimulation.Population = VanillaPopulation;
+        if (_previousPopulation.HasValue && MarketSimulation.Population == _lastPopulation)
+            MarketSimulation.Population = _previousPopulation.Value;
+        _previousPopulation = null;
+        _game = null;
+        _market = null;
     }
 
     private void Update()
@@ -99,11 +107,22 @@ public class RealisticPopulationBehaviour : ModBehaviour
     private void Apply()
     {
         if (TimeOfDay.Instance == null || GameSettings.Instance == null) return;
+        GameSettings game = GameSettings.Instance;
+        if (_game != game || _market != game.simulation)
+        {
+            _game = game;
+            _market = game.simulation;
+            _lastStamp = int.MinValue;
+        }
         SDateTime now = SDateTime.Now();
         int stamp = (now.Year * 12 + now.Month) * 64 + now.Day;
         if (stamp == _lastStamp) return; // update at most once per in-game day
         _lastStamp = stamp;
         double year = SDateTime.BaseYear + now.Year + (now.Month + (double)now.Day / Math.Max(1, GameSettings.DaysPerMonth)) / 12.0;
-        MarketSimulation.Population = PopulationAt(year);
+        uint current = MarketSimulation.Population;
+        if (!_previousPopulation.HasValue || current != _lastPopulation)
+            _previousPopulation = current;
+        _lastPopulation = PopulationAt(year);
+        MarketSimulation.Population = _lastPopulation;
     }
 }
