@@ -9,8 +9,8 @@ namespace ISPBusiness
         public const int SaveVersion = 1;
 
         /// <summary>Network protocol version. Players must match to share ISP agreements.</summary>
-        public const int ProtocolVersion = 1;
-        public const string ModVersion = "0.3.0";
+        public const int ProtocolVersion = 2;
+        public const string ModVersion = "0.4.0";
 
         /// <summary>Network id registered with the game for this mod's messages (first come, first served).</summary>
         public const byte NetworkId = 0xA7;
@@ -62,6 +62,11 @@ namespace ISPBusiness
         public const double OfferLifetimeMonths = 24.0;
         public const float MinOfferMbps = 1f;                  // products below this don't ask for ISP service
         public const double DealEndMonths = 6.0;               // a deal ends once its product stays under MinOfferMbps this long
+
+        // ---- Company-wide ISP deals (spec 7)
+        public const double CompanyDealsFromYear = 1990.0;
+        public const double MinCompanyMbps = 1000.0;           // a company needs at least this much to offer one
+        public const int CompanyOffersPerMonth = 4;            // separate from the 10 product offers
 
         /// <summary>Vanilla business-star buckets: stars 0..6 roll a multiplier in [1.05 + s*w, 1.05 + (s+1)*w].</summary>
         public static double StarMultiplier(int stars, double roll01)

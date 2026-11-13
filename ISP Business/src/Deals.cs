@@ -1,21 +1,31 @@
-// ISP Business - corporate product ISP deals (spec 5.2, 5.4, 6, 13, Milestone B).
+// ISP Business - corporate ISP deals (spec 5.2, 5.4, 6, 7, 13; Milestones B and C).
 //
+// Product deals (Milestone B):
 //  - Each month, up to 10 AI products that need internet (>= 1 Mbps) offer an ISP deal, ranked by value.
 //    You need a receptionist, as for vanilla deals, and deals must be on in the difficulty settings.
 //  - The price per Mbps is locked when the offer is made: $11.45 x the vanilla business-star multiplier.
-//  - An offer stays open for 24 months. It appears in the vanilla Deals window (Incoming deals) at the
-//    receptionist's time, like a business guest. Accept or reject it there (see VanillaDeals.cs).
-//  - An accepted deal becomes an ISP process on one of your pools. You're paid every hour for the Mbps
-//    you actually deliver, and you pay wholesale transit on it. Electricity comes from your servers.
+// Company-wide deals (Milestone C):
+//  - From 1990, up to 4 AI companies a month whose total need is >= 1000 Mbps offer a company-wide deal.
+//  - It covers every product the company owns now or later (products change hands with trades and
+//    buyouts, so the coverage follows), plus its development traffic, from vanilla's own formula:
+//    team size x DevTime / 24 per project (SoftwareAlpha.GetLoadRequirement), with the AI's optimal team
+//    size (SoftwareType.GetOptimalEmployeeCount, as in SimulatedCompany.PayExpenses), times the era's
+//    bandwidth factor. Vanilla UsesISP is never changed: this is counted only inside the ISP deal.
+//  - Accepting it folds your product deals for that company into it (no penalty). Products another
+//    player holds a product deal for stay theirs and are left out of your company deal, so no traffic
+//    is billed twice. No new product offers are made for a company under a company-wide deal.
+//  - It ends without penalty when the company closes, is bought by a player, or needs under 1 Mbps for
+//    6 months. Being bought by an AI company keeps it (the company still runs as a subsidiary).
+// Both kinds:
+//  - Offers and deals live in the vanilla Deals window (VanillaDeals.cs). Offers stay open 24 months.
+//  - An accepted deal becomes an ISP process on one of your pools. You earn for the Mbps you actually
+//    deliver, every hour; the customer pays it through vanilla's daily deal payment (Deals bills, "ISP").
+//    You pay wholesale transit on it. Electricity comes from your servers.
 //  - Performance starts at 1.0 and changes monthly with delivered/requested bandwidth (spec 13.3).
 //    At 0 the customer cancels. Good months raise business reputation, bad months lower it.
-//  - A deal ends without penalty when the product leaves the market or stays under 1 Mbps for 6 months.
-//  - Hosting and ISP are separate: a product can have a hosting deal and an ISP deal at the same time.
 //  - Multiplayer: offers are made on each player's own machine. When a player accepts, they tell the
-//    others (claim), so nobody else is offered or keeps that product. Ties go to the lower player id.
-//    Claims are re-sent to players who join, and dropped when a player leaves.
-// The vanilla Deals window shows these deals, but they are left out of the vanilla save (VanillaDeals.cs),
-// so saves stay loadable without the mod.
+//    others (claim), so nobody else is offered or keeps it. Ties go to the lower player id.
+// The vanilla Deals window shows these deals, but they are left out of the vanilla save (VanillaDeals.cs).
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,9 +35,13 @@ namespace ISPBusiness
 {
     public sealed class IspDeal
     {
+        public const byte KindProduct = 0, KindCompany = 1;
+
         public int Id;
-        public uint ProductId;
-        public string ProductName;
+        public byte Kind;              // KindProduct or KindCompany
+        public uint ProductId;         // product deals
+        public uint CompanyId;         // company deals (the customer)
+        public string ProductName;     // product name, or the company name for company deals
         public string CompanyName;
         public double Rate;            // $ per Mbps per month, locked at offer time
         public int OfferedAt;          // SDateTime stamp
@@ -35,13 +49,20 @@ namespace ISPBusiness
         public double Performance = 1.0;
         public double MonthDemand;     // Mbps-hours requested this month
         public double MonthDelivered;  // Mbps-hours delivered this month
-        public int LowSince = -1;      // stamp since the product needs less than MinOfferMbps, or -1
+        public int LowSince = -1;      // stamp since the need is under MinOfferMbps, or -1
         public double TotalRevenue;
         public double LastFulfilment = 1.0;
-        public double EstimatedMbps;   // demand when offered (offers) / last hour (deals)
+        public double EstimatedMbps;   // need when offered (offers) / last hour (deals)
+        public double DevMbps;         // company deals: development part of EstimatedMbps
         public int ShowAt;             // stamp when the offer appears in the Deals window (receptionist time)
+        public double Unpaid;          // earned but not yet paid by the customer
 
-        /// <summary>Performance change this month would give at the current fulfilment (for the vanilla Performance column).</summary>
+        public bool Active { get { return AcceptedAt != 0; } }
+        public bool IsCompany { get { return Kind == KindCompany; } }
+        public string Key { get { return "deal:" + Id; } }
+        public string Label { get { return IsCompany ? CompanyName + " (company-wide)" : ProductName + " (" + CompanyName + ")"; } }
+
+        /// <summary>Performance change this month would give at the current fulfilment (vanilla Performance column).</summary>
         public double PerfTrend
         {
             get
@@ -50,25 +71,25 @@ namespace ISPBusiness
                 return Config.PerformanceChange(f);
             }
         }
-
-        public bool Active { get { return AcceptedAt != 0; } }
-        public string Key { get { return "deal:" + Id; } }
     }
 
     public static class Deals
     {
+        public const string Bill = "ISP";
+
         public static readonly List<IspDeal> Offers = new List<IspDeal>();
         public static readonly List<IspDeal> Active = new List<IspDeal>();
 
-        /// <summary>Products you declined: product id -> stamp. Not offered again for 6 months.</summary>
-        private static readonly Dictionary<uint, int> Declined = new Dictionary<uint, int>();
+        /// <summary>Declined offers: "p:id" / "c:id" -> stamp. Not offered again for 6 months.</summary>
+        private static readonly Dictionary<string, int> Declined = new Dictionary<string, int>();
 
-        /// <summary>Products other players hold an ISP deal for: product id -> player id. Not saved.</summary>
+        /// <summary>Products / companies other players hold an ISP deal for: id -> player id. Not saved.</summary>
         public static readonly Dictionary<uint, byte> OtherClaims = new Dictionary<uint, byte>();
+        public static readonly Dictionary<uint, byte> OtherCompanyClaims = new Dictionary<uint, byte>();
 
         private static int _nextId = 1;
         private static int _lastMonth = int.MinValue;
-        private static double _pendingRevenue;
+        private static int _lastDay = int.MinValue;
 
         private static readonly Dictionary<uint, SoftwareProduct> _products = new Dictionary<uint, SoftwareProduct>();
         private static int _productsDay = int.MinValue;
@@ -79,14 +100,15 @@ namespace ISPBusiness
             Active.Clear();
             Declined.Clear();
             OtherClaims.Clear();
+            OtherCompanyClaims.Clear();
             _products.Clear();
             _productsDay = int.MinValue;
             _nextId = 1;
             _lastMonth = int.MinValue;
-            _pendingRevenue = 0;
+            _lastDay = int.MinValue;
         }
 
-        // ---------- products
+        // ---------- products and companies
 
         private static void RefreshProducts(bool force)
         {
@@ -106,6 +128,12 @@ namespace ISPBusiness
             return _products.TryGetValue(id, out SoftwareProduct p) ? p : null;
         }
 
+        private static Company CompanyById(uint id)
+        {
+            GameSettings gs = GameSettings.Instance;
+            return gs != null && gs.simulation != null ? gs.simulation.GetCompany(id) : null;
+        }
+
         /// <summary>Mbps the product needs right now (vanilla load x era factor; includes other mods' load changes).</summary>
         public static double DemandOf(SoftwareProduct p)
         {
@@ -113,25 +141,69 @@ namespace ISPBusiness
             return p.GetLoadRequirement() * 1f.BandwidthFactor(SDateTime.Now());
         }
 
-        /// <summary>The AI company that owns the product (the deal's client), or null.</summary>
+        /// <summary>An AI company that can buy ISP service: not a player, not owned by a player, still running.</summary>
+        public static bool IsAiCompany(Company c)
+        {
+            if (!(c is SimulatedCompany sc)) return false;
+            if (sc.Bankrupt || sc.IsPlayerOwned()) return false;
+            if (sc.IsSubsidiary() && sc.OwnerCompany != null && sc.OwnerCompany.Player) return false;
+            return true;
+        }
+
+        /// <summary>Mbps a company needs: its products (minus those another player serves) plus development.</summary>
+        public static double CompanyDemand(Company c, out double dev)
+        {
+            dev = 0;
+            if (c == null) return 0;
+            double sum = 0;
+            if (c.Products != null)
+            {
+                foreach (SoftwareProduct p in c.Products)
+                {
+                    if (p == null || OtherClaims.ContainsKey(p.ID)) continue;
+                    sum += DemandOf(p);
+                }
+            }
+            if (c is SimulatedCompany sc && sc.ProjectQueue != null)
+            {
+                double factor = 1f.BandwidthFactor(SDateTime.Now());
+                foreach (var proj in sc.ProjectQueue)
+                {
+                    if (proj == null || !proj.DevStarted || proj.Released) continue;
+                    int team = SoftwareType.GetOptimalEmployeeCount(proj.DevTime).Sum();
+                    dev += team * (proj.DevTime / 24.0) * factor;
+                }
+            }
+            return sum + dev;
+        }
+
+        /// <summary>The deal's customer company, or null.</summary>
         public static Company ClientOf(IspDeal d)
         {
+            if (d.IsCompany) return CompanyById(d.CompanyId);
             SoftwareProduct p = Product(d.ProductId);
             return p != null ? p.DevCompany : null;
+        }
+
+        /// <summary>True when one of my company-wide deals (or another player's) covers this company.</summary>
+        private static bool CompanyCovered(uint companyId)
+        {
+            return OtherCompanyClaims.ContainsKey(companyId) || Active.Any(x => x.IsCompany && x.CompanyId == companyId);
         }
 
         /// <summary>True while an offer can still be accepted.</summary>
         public static bool IsOpenOffer(IspDeal d)
         {
-            return Offers.Contains(d) && !OtherClaims.ContainsKey(d.ProductId) && Product(d.ProductId) != null;
+            if (!Offers.Contains(d)) return false;
+            if (d.IsCompany) return !OtherCompanyClaims.ContainsKey(d.CompanyId) && IsAiCompany(CompanyById(d.CompanyId));
+            SoftwareProduct p = Product(d.ProductId);
+            if (p == null || OtherClaims.ContainsKey(d.ProductId)) return false;
+            return p.DevCompany == null || !CompanyCovered(p.DevCompany.ID);
         }
 
         private static bool IsAiCustomer(SoftwareProduct p)
         {
-            if (!(p.DevCompany is SimulatedCompany sc)) return false;
-            if (sc.IsPlayerOwned()) return false;
-            if (sc.IsSubsidiary() && sc.OwnerCompany != null && sc.OwnerCompany.Player) return false;
-            return true;
+            return IsAiCompany(p.DevCompany);
         }
 
         // ---------- hourly
@@ -141,20 +213,37 @@ namespace ISPBusiness
         {
             foreach (IspDeal d in Active)
             {
-                SoftwareProduct p = Product(d.ProductId);
-                double demand = DemandOf(p);
+                double demand;
+                if (d.IsCompany)
+                {
+                    demand = CompanyDemand(CompanyById(d.CompanyId), out double dev);
+                    d.DevMbps = dev;
+                }
+                else demand = DemandOf(Product(d.ProductId));
                 d.EstimatedMbps = demand;
                 if (!IspNetwork.Processes.TryGetValue(d.Key, out IspProcess proc))
                 {
                     proc = new IspProcess { Key = d.Key };
                     IspNetwork.Processes[d.Key] = proc;
                 }
-                proc.Label = d.ProductName + " (" + d.CompanyName + ")";
+                proc.Label = d.Label;
                 proc.Demand = demand;
             }
         }
 
-        /// <summary>Pays deal revenue and transit for the hour, and handles the month boundary.</summary>
+        private static string EndReason(IspDeal d)
+        {
+            if (d.IsCompany)
+            {
+                Company c = CompanyById(d.CompanyId);
+                if (c == null || c.Bankrupt) return d.CompanyName + " closed down";
+                if (!IsAiCompany(c)) return d.CompanyName + " is now owned by a player";
+                return null;
+            }
+            return Product(d.ProductId) == null ? "the product left the market" : null;
+        }
+
+        /// <summary>Books deal revenue and transit for the hour, and handles the month boundary.</summary>
         public static void OnHour(double hoursPerMonth, double transitRate)
         {
             GameSettings gs = GameSettings.Instance;
@@ -170,14 +259,18 @@ namespace ISPBusiness
                 double delivered = proc != null ? proc.Delivered : 0;
 
                 double revenue = delivered * d.Rate / hoursPerMonth;
-                _pendingRevenue += revenue;
+                d.Unpaid += revenue;
                 d.TotalRevenue += revenue;
                 IspNetwork.MonthRevenue += revenue;
                 transit += delivered * transitRate / hoursPerMonth;
                 d.MonthDemand += demand;
                 d.MonthDelivered += delivered;
 
-                if (Product(d.ProductId) == null) { ended.Add(new KeyValuePair<IspDeal, string>(d, "the product left the market")); continue; }
+                // Not in the vanilla Deals window (deals off, or no customer): pay it directly.
+                if (d.Unpaid >= 1.0 && !VanillaDeals.IsShown(d)) PayDirect(d);
+
+                string reason = EndReason(d);
+                if (reason != null) { ended.Add(new KeyValuePair<IspDeal, string>(d, reason)); continue; }
                 if (demand < Config.MinOfferMbps)
                 {
                     if (d.LowSince < 0) d.LowSince = now;
@@ -189,13 +282,11 @@ namespace ISPBusiness
 
             if (transit > 0) gs.ServerCost += (float)transit;
             IspNetwork.MonthTransit += transit;
-            if (_pendingRevenue >= 1.0)
-            {
-                gs.MyCompany.MakeTransaction(_pendingRevenue, Company.TransactionCategory.Contracts, true, "ISP service", true);
-                _pendingRevenue = 0;
-            }
 
             foreach (var kv in ended) End(kv.Key, "Your ISP deal for " + kv.Key.ProductName + " ended because " + kv.Value + ". No penalty.", false);
+
+            int day = now / (24 * 60);
+            if (day != _lastDay) { _lastDay = day; RefreshOfferEstimates(); }
 
             int month = GameClock.MonthIndex;
             if (month != _lastMonth)
@@ -206,9 +297,27 @@ namespace ISPBusiness
                 {
                     MonthlyReview();
                     MonthlyOffers();
+                    MonthlyCompanyOffers();
                 }
                 ExpireOffers();
             }
+        }
+
+        /// <summary>Pays what the deal earned straight to the player (Deals bills, "ISP").</summary>
+        private static void PayDirect(IspDeal d)
+        {
+            if (d.Unpaid <= 0) return;
+            GameSettings.Instance.MyCompany.MakeTransaction((float)d.Unpaid, Company.TransactionCategory.Deals, true, Bill);
+            d.Unpaid = 0;
+        }
+
+        /// <summary>vanilla Payout(): hands over what the deal earned since the last daily payment.</summary>
+        public static float TakeUnpaid(IspDeal d)
+        {
+            if (!Active.Contains(d) || d.Unpaid <= 0) return 0f;
+            float amount = (float)d.Unpaid;
+            d.Unpaid = 0;
+            return amount;
         }
 
         // ---------- monthly
@@ -239,22 +348,33 @@ namespace ISPBusiness
             }
         }
 
-        private static void MonthlyOffers()
+        private static bool OffersAllowed()
         {
             GameSettings gs = GameSettings.Instance;
-            if (gs.simulation == null) return;
-            if (gs.Difficulty.Deals < 0.5f) return; // deals are off in this game's difficulty settings
+            return gs.simulation != null && gs.Difficulty.Deals >= 0.5f; // deals can be off in the difficulty settings
+        }
+
+        private static bool RecentlyDeclined(string key, int now)
+        {
+            return Declined.TryGetValue(key, out int when) && GameClock.MonthsBetween(when, now) < 6.0;
+        }
+
+        private static void MonthlyOffers()
+        {
+            if (!OffersAllowed()) return;
+            GameSettings gs = GameSettings.Instance;
             RefreshProducts(true);
             int now = GameClock.Stamp;
 
-            var taken = new HashSet<uint>(Active.Select(x => x.ProductId).Concat(Offers.Select(x => x.ProductId)));
+            var taken = new HashSet<uint>(Active.Where(x => !x.IsCompany).Select(x => x.ProductId)
+                                          .Concat(Offers.Where(x => !x.IsCompany).Select(x => x.ProductId)));
             int stars = gs.MyCompany.BusinessStars;
             var candidates = new List<KeyValuePair<SoftwareProduct, double>>();
             foreach (SoftwareProduct p in _products.Values)
             {
                 if (taken.Contains(p.ID) || OtherClaims.ContainsKey(p.ID)) continue;
-                if (Declined.TryGetValue(p.ID, out int when) && GameClock.MonthsBetween(when, now) < 6.0) continue;
-                if (!IsAiCustomer(p)) continue;
+                if (RecentlyDeclined("p:" + p.ID, now)) continue;
+                if (!IsAiCustomer(p) || CompanyCovered(p.DevCompany.ID)) continue;
                 double mbps = DemandOf(p);
                 if (mbps < Config.MinOfferMbps) continue;
                 candidates.Add(new KeyValuePair<SoftwareProduct, double>(p, mbps * UnityEngine.Random.Range(0.85f, 1f)));
@@ -270,9 +390,11 @@ namespace ISPBusiness
                 Offers.Add(new IspDeal
                 {
                     Id = _nextId++,
+                    Kind = IspDeal.KindProduct,
                     ProductId = p.ID,
+                    CompanyId = p.DevCompany.ID,
                     ProductName = p.Name,
-                    CompanyName = p.DevCompany != null ? p.DevCompany.Name : "?",
+                    CompanyName = p.DevCompany.Name,
                     Rate = Config.CorporateReferencePrice * Config.StarMultiplier(stars, UnityEngine.Random.value),
                     OfferedAt = now,
                     EstimatedMbps = DemandOf(p),
@@ -280,15 +402,69 @@ namespace ISPBusiness
                 });
                 sent++;
             }
-            foreach (uint k in Declined.Where(kv => GameClock.MonthsBetween(kv.Value, now) >= 6.0).Select(kv => kv.Key).ToList()) Declined.Remove(k);
-            if (sent > 0) Debug.Log("[ISP Business] " + sent + " new ISP offers.");
+            foreach (string k in Declined.Where(kv => GameClock.MonthsBetween(kv.Value, now) >= 6.0).Select(kv => kv.Key).ToList()) Declined.Remove(k);
+            if (sent > 0) Debug.Log("[ISP Business] " + sent + " new product ISP offers.");
+        }
+
+        private static void MonthlyCompanyOffers()
+        {
+            if (!OffersAllowed()) return;
+            if (GameClock.Year < Config.CompanyDealsFromYear) return;
+            GameSettings gs = GameSettings.Instance;
+            int now = GameClock.Stamp;
+            var taken = new HashSet<uint>(Active.Concat(Offers).Where(x => x.IsCompany).Select(x => x.CompanyId));
+            int stars = gs.MyCompany.BusinessStars;
+
+            var candidates = new List<KeyValuePair<Company, double>>();
+            foreach (Company c in gs.simulation.GetAllCompanies())
+            {
+                if (c == null || taken.Contains(c.ID) || OtherCompanyClaims.ContainsKey(c.ID)) continue;
+                if (!IsAiCompany(c) || RecentlyDeclined("c:" + c.ID, now)) continue;
+                double mbps = CompanyDemand(c, out double _);
+                if (mbps < Config.MinCompanyMbps) continue;
+                candidates.Add(new KeyValuePair<Company, double>(c, mbps * UnityEngine.Random.Range(0.85f, 1f)));
+            }
+
+            int sent = 0;
+            foreach (var kv in candidates.OrderByDescending(x => x.Value))
+            {
+                if (sent >= Config.CompanyOffersPerMonth) break;
+                SDateTime? reception = DealWindow.FindReceptionTime();
+                if (!reception.HasValue) break;
+                Company c = kv.Key;
+                double mbps = CompanyDemand(c, out double dev);
+                Offers.Add(new IspDeal
+                {
+                    Id = _nextId++,
+                    Kind = IspDeal.KindCompany,
+                    CompanyId = c.ID,
+                    ProductName = c.Name,
+                    CompanyName = c.Name,
+                    Rate = Config.CorporateReferencePrice * Config.StarMultiplier(stars, UnityEngine.Random.value),
+                    OfferedAt = now,
+                    EstimatedMbps = mbps,
+                    DevMbps = dev,
+                    ShowAt = reception.Value.ToInt(),
+                });
+                sent++;
+            }
+            if (sent > 0) Debug.Log("[ISP Business] " + sent + " new company-wide ISP offers.");
         }
 
         private static void ExpireOffers()
         {
             int now = GameClock.Stamp;
-            Offers.RemoveAll(o => GameClock.MonthsBetween(o.OfferedAt, now) > Config.OfferLifetimeMonths
-                                  || Product(o.ProductId) == null || OtherClaims.ContainsKey(o.ProductId));
+            Offers.RemoveAll(o => GameClock.MonthsBetween(o.OfferedAt, now) > Config.OfferLifetimeMonths || !IsOpenOffer(o));
+        }
+
+        /// <summary>Refreshes the need shown on open offers (daily is plenty).</summary>
+        public static void RefreshOfferEstimates()
+        {
+            foreach (IspDeal o in Offers)
+            {
+                if (o.IsCompany) { o.EstimatedMbps = CompanyDemand(CompanyById(o.CompanyId), out double dev); o.DevMbps = dev; }
+                else o.EstimatedMbps = DemandOf(Product(o.ProductId));
+            }
         }
 
         // ---------- player actions (from the vanilla Deals window)
@@ -299,19 +475,37 @@ namespace ISPBusiness
             if (!Offers.Remove(offer)) return;
             offer.AcceptedAt = Math.Max(1, GameClock.Stamp);
             Active.Add(offer);
+
+            if (offer.IsCompany)
+            {
+                // Fold my product deals and offers for this company into the company-wide deal.
+                foreach (IspDeal d in Active.Where(x => !x.IsCompany && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId)).ToList())
+                    End(d, null, false);
+                Offers.RemoveAll(x => !x.IsCompany && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId));
+                IspNetwork.PendingNotices.Add("Your company-wide ISP deal with " + offer.CompanyName + " now covers all its products and development. " +
+                                              "Your product ISP deals with them were folded into it, without penalty.");
+            }
+
             string pool = IspNetwork.BestPool();
             IspNetwork.SetAssignment(offer.Key, pool);
             RefreshDemand();
             IspNetwork.Recalculate();
             IspNetwork.ApplyPower();
-            Net.BroadcastClaim(offer.ProductId, true);
+            if (offer.IsCompany) Net.BroadcastCompanyClaim(offer.CompanyId, true);
+            else Net.BroadcastClaim(offer.ProductId, true);
             if (pool == null)
                 IspNetwork.PendingNotices.Add("You accepted the ISP deal for " + offer.ProductName + ", but you have no ISP pool, so it isn't served yet. " +
-                                              "Switch a server group to ISP mode in the ISP Network window, or its Performance will drop.");
+                                              "Switch a server group to ISP mode, or its Performance will drop.");
+        }
+
+        private static uint ProductOwner(IspDeal d)
+        {
+            SoftwareProduct p = Product(d.ProductId);
+            return p != null && p.DevCompany != null ? p.DevCompany.ID : 0u;
         }
 
         /// <summary>Vanilla Reject (wasActive false) or Cancel (wasActive true). For a cancel, vanilla has
-        /// already applied ReputationEffect(true), which is CancelPenalty.</summary>
+        /// already applied ReputationEffect(true), which is CancelPenalty, and taken Payout().</summary>
         public static void CancelFromVanilla(IspDeal d, bool wasActive)
         {
             if (wasActive) End(d, null, false);
@@ -321,7 +515,7 @@ namespace ISPBusiness
         public static void Decline(IspDeal offer)
         {
             if (!Offers.Remove(offer)) return;
-            Declined[offer.ProductId] = GameClock.Stamp;
+            Declined[offer.IsCompany ? "c:" + offer.CompanyId : "p:" + offer.ProductId] = GameClock.Stamp;
         }
 
         /// <summary>Reputation change (business stars) when the player cancels an active deal, scaled by size.</summary>
@@ -334,13 +528,15 @@ namespace ISPBusiness
         private static void End(IspDeal d, string notice, bool penalty)
         {
             if (!Active.Remove(d)) return;
+            PayDirect(d); // whatever the customer hadn't paid yet
             IspNetwork.RemoveProcess(d.Key);
             if (penalty)
             {
                 double weight = Math.Min(1.0, Math.Sqrt(Math.Max(0, d.EstimatedMbps) / Config.RepReferenceMbps));
                 GameSettings.Instance.MyCompany.ChangeBusinessRep((float)(Config.RepBadMonth * Math.Max(0.1, weight)), "ISP");
             }
-            Net.BroadcastClaim(d.ProductId, false);
+            if (d.IsCompany) Net.BroadcastCompanyClaim(d.CompanyId, false);
+            else Net.BroadcastClaim(d.ProductId, false);
             if (notice != null) IspNetwork.PendingNotices.Add(notice);
         }
 
@@ -354,31 +550,50 @@ namespace ISPBusiness
                 return;
             }
             OtherClaims[productId] = player;
-            Offers.RemoveAll(o => o.ProductId == productId);
-            IspDeal mine = Active.FirstOrDefault(x => x.ProductId == productId);
-            if (mine != null)
+            Offers.RemoveAll(o => !o.IsCompany && o.ProductId == productId);
+            IspDeal mine = Active.FirstOrDefault(x => !x.IsCompany && x.ProductId == productId);
+            if (mine != null) ResolveTie(player, mine, () => OtherClaims.Remove(productId), () => Net.BroadcastClaim(productId, true));
+        }
+
+        public static void OnRemoteCompanyClaim(byte player, uint companyId, bool claim)
+        {
+            if (!claim)
             {
-                byte me = GameSettings.Instance.MyCompany.NetworkPlayerID;
-                if (player < me)
-                {
-                    // Both accepted at once: the lower player id keeps it, the other ends without penalty.
-                    if (Active.Remove(mine)) IspNetwork.RemoveProcess(mine.Key);
-                    IspNetwork.PendingNotices.Add("Another player signed the ISP deal for " + mine.ProductName + " at the same time, so yours was withdrawn. No penalty.");
-                }
-                else
-                {
-                    OtherClaims.Remove(productId);
-                    Net.BroadcastClaim(productId, true); // tell them we keep it
-                }
+                if (OtherCompanyClaims.TryGetValue(companyId, out byte holder) && holder == player) OtherCompanyClaims.Remove(companyId);
+                return;
+            }
+            OtherCompanyClaims[companyId] = player;
+            // Their company deal covers the company: my offers for it go. My existing product deals stay mine
+            // (they've been told about them, so their deal leaves those products out).
+            Offers.RemoveAll(o => o.IsCompany ? o.CompanyId == companyId : (o.CompanyId == companyId || ProductOwner(o) == companyId));
+            IspDeal mine = Active.FirstOrDefault(x => x.IsCompany && x.CompanyId == companyId);
+            if (mine != null) ResolveTie(player, mine, () => OtherCompanyClaims.Remove(companyId), () => Net.BroadcastCompanyClaim(companyId, true));
+        }
+
+        /// <summary>Both players hold the same deal: the lower player id keeps it, the other ends without penalty.</summary>
+        private static void ResolveTie(byte player, IspDeal mine, Action forgetTheirs, Action reassert)
+        {
+            byte me = GameSettings.Instance.MyCompany.NetworkPlayerID;
+            if (player < me)
+            {
+                if (Active.Remove(mine)) { PayDirect(mine); IspNetwork.RemoveProcess(mine.Key); }
+                IspNetwork.PendingNotices.Add("Another player signed the ISP deal for " + mine.ProductName + " at the same time, so yours was withdrawn. No penalty.");
+            }
+            else
+            {
+                forgetTheirs();
+                reassert(); // tell them we keep it
             }
         }
 
         public static void OnPlayerLeft(byte player)
         {
             foreach (uint k in OtherClaims.Where(kv => kv.Value == player).Select(kv => kv.Key).ToList()) OtherClaims.Remove(k);
+            foreach (uint k in OtherCompanyClaims.Where(kv => kv.Value == player).Select(kv => kv.Key).ToList()) OtherCompanyClaims.Remove(k);
         }
 
-        public static IEnumerable<uint> MyClaims() { return Active.Select(x => x.ProductId); }
+        public static IEnumerable<uint> MyClaims() { return Active.Where(x => !x.IsCompany).Select(x => x.ProductId); }
+        public static IEnumerable<uint> MyCompanyClaims() { return Active.Where(x => x.IsCompany).Select(x => x.CompanyId); }
 
         // ---------- save data
 
@@ -389,7 +604,8 @@ namespace ISPBusiness
                 Pack.L(d.Id), Pack.L(d.ProductId), d.ProductName ?? "", d.CompanyName ?? "", Pack.D(d.Rate),
                 Pack.L(d.OfferedAt), Pack.L(d.AcceptedAt), Pack.D(d.Performance), Pack.D(d.MonthDemand),
                 Pack.D(d.MonthDelivered), Pack.L(d.LowSince), Pack.D(d.TotalRevenue), Pack.D(d.EstimatedMbps),
-                Pack.D(d.LastFulfilment), Pack.L(d.ShowAt),
+                Pack.D(d.LastFulfilment), Pack.L(d.ShowAt), Pack.L(d.Kind), Pack.L(d.CompanyId), Pack.D(d.Unpaid),
+                Pack.D(d.DevMbps),
             })));
         }
 
@@ -411,6 +627,10 @@ namespace ISPBusiness
                     LowSince = (int)Pack.L(f[10]), TotalRevenue = Pack.D(f[11]), EstimatedMbps = Pack.D(f[12]),
                     LastFulfilment = Pack.D(f[13]),
                     ShowAt = f.Length > 14 ? (int)Pack.L(f[14]) : 0,
+                    Kind = f.Length > 15 ? (byte)Pack.L(f[15]) : IspDeal.KindProduct,
+                    CompanyId = f.Length > 16 ? (uint)Pack.L(f[16]) : 0u,
+                    Unpaid = f.Length > 17 ? Pack.D(f[17]) : 0,
+                    DevMbps = f.Length > 18 ? Pack.D(f[18]) : 0,
                 };
                 if (d.Id >= _nextId) _nextId = d.Id + 1;
                 (d.Active ? Active : Offers).Add(d);
@@ -418,13 +638,15 @@ namespace ISPBusiness
             foreach (string rec in Pack.Unlist(declined))
             {
                 string[] f = rec.Split(Pack.Field);
-                if (f.Length == 2) Declined[(uint)Pack.L(f[0])] = (int)Pack.L(f[1]);
+                if (f.Length != 2) continue;
+                string key = f[0].StartsWith("c:", StringComparison.Ordinal) || f[0].StartsWith("p:", StringComparison.Ordinal) ? f[0] : "p:" + f[0];
+                Declined[key] = (int)Pack.L(f[1]);
             }
         }
 
         public static string PackDeclined()
         {
-            return Pack.List(Declined.Select(kv => Pack.L(kv.Key) + Pack.Field + Pack.L(kv.Value)));
+            return Pack.List(Declined.Select(kv => kv.Key + Pack.Field + Pack.L(kv.Value)));
         }
 
         public static int NextId { get { return _nextId; } }

@@ -1,12 +1,12 @@
 # ISP Business
 
-A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This version has **Milestone A (the ISP network core)** and **Milestone B (product ISP deals with AI companies)**.
+A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This version has **Milestone A (the ISP network core)**, **Milestone B (product ISP deals with AI companies)** and **Milestone C (company-wide ISP deals)**.
 
 ## What it does
 
 **ISP Network window**
 - Open it from its button on the bottom bar. The counter on the button shows open ISP offers.
-- All your server groups in the same table as the vanilla Servers window: status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback, Select fallback and View (moves the camera to the servers). A **Switch mode** button turns a group into an ISP pool or back to hosting.
+- Your ISP pools only in the same table as the vanilla Servers window: status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback, Select fallback and View (moves the camera to the servers). **Add server group** turns a hosting group into an ISP pool, and **Back to hosting** reverses it. The vanilla Servers window also gets an **ISP mode** button on each group.
 - Below the table are the ISP processes on the selected pool: your company's internet and one per ISP deal. Use **Move selected processes** to move them to another pool, like vanilla.
 - The **Deals window** button opens the vanilla Deals window, where ISP offers and deals live (see below).
 
@@ -40,9 +40,15 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 - There's no fake income: you only save money, and you still pay the electricity for your ISP servers.
 - Costs are the same per month whatever days-per-month setting you play with.
 
+**Company-wide ISP deals (from 1990)**
+- Each month, up to 4 AI companies needing at least 1000 Mbps in total offer a company-wide deal, separate from the 10 product offers.
+- It covers every product the company owns, now and later (it follows trades and buyouts), plus its development traffic, worked out with vanilla's own formula for projects in development (team size x DevTime / 24, times the era's bandwidth factor). Vanilla's internet billing isn't changed.
+- Accepting it folds your product deals with that company into it, without penalty. Products another player already serves stay theirs and are left out, so nothing is billed twice.
+- It ends without penalty when the company closes or a player buys it. Being bought by an AI company keeps it.
+
 **ISP deals with AI companies**
 - Each month, up to 10 AI products that need at least 1 Mbps offer you an ISP deal, ranked by value. You need a receptionist, and deals must be on in the difficulty settings.
-- Offers show up in the vanilla **Deals window** under Incoming deals (description "ISP service for ...") at the receptionist's time, and accepted ones under Active deals. Accept, Reject and Cancel work as for vanilla deals. The details panel shows the price per Mbps, the bandwidth needed, the monthly income, and for active deals the delivered share, Performance, pool and earnings. The "Offer" column is the monthly income at the current need.
+- Offers show up in the vanilla **Deals window** under Incoming deals (description "ISP service for ...") at the receptionist's time, and accepted ones under Active deals. Accept, Reject and Cancel work as for vanilla deals. The details panel shows the price per Mbps, the bandwidth needed, the monthly income, and for active deals the delivered share, Performance, pool and earnings. The "Offer" column uses the same unit as hosting deals (income per Mb per hour, the monthly price / 24). The customer pays daily through vanilla's deal payments, so ISP income shows under **Deals** in the finance bills as "ISP" (bills show last month, so it appears after the first month change).
 - ISP deals are kept out of the vanilla part of the save and stored in the mod's own data, so a save still loads after you remove the mod (the ISP deals are simply gone then).
 - Price: $11.45 per Mbps per month × the vanilla business-star multiplier (1.05 at 0 stars up to 1.25 at 6 stars). It's locked when the offer is made.
 - Offers stay open for 24 months. A declined product isn't offered again for 6 months.

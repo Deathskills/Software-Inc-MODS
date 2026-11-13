@@ -13,8 +13,10 @@
 //    Offers are never sent through vanilla's AddDeal (which broadcasts); they are inserted locally.
 //  - No business guest is spawned (a waiting guest carries the deal and could end up in the save).
 //    The offer shows up at the receptionist's time instead, like a guest arriving.
-//  - Money: Payout() is 0, so vanilla's daily loop pays nothing; the mod pays per delivered Mbps hourly.
-//    Vanilla's daily Performance change is 0; the mod's monthly Performance is mirrored every frame.
+//  - Money: the mod books what each deal earns per delivered Mbps every hour; Payout() hands that over to
+//    vanilla's daily deal payment, so the customer pays it and it shows under Deals in the finance bills
+//    as "ISP", like hosting deals. Vanilla's daily Performance change is 0; the mod's monthly Performance
+//    is mirrored every frame.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -38,16 +40,19 @@ namespace ISPBusiness
 
         public override void RecalculateWorth() { }
 
-        /// <summary>"Offer" column: monthly income at the current need.</summary>
-        public override float Worth() { return (float)(Data.Rate * Math.Max(0, Data.EstimatedMbps)); }
+        /// <summary>"Offer" column, same unit as hosting deals: income per Mb per hour (monthly price / 24).</summary>
+        public override float Worth() { return (float)(Data.Rate / 24.0); }
 
-        public override float Payout() { return 0f; }
+        public override float Payout() { return Client != null ? Deals.TakeUnpaid(Data) : 0f; }
 
         public override float ReputationEffect(bool ending) { return ending ? Deals.CancelPenalty(Data) : 0f; }
 
         public override string ReputationCategory() { return "ISP"; }
 
-        public override string Description() { return "ISP service for " + Data.ProductName; }
+        public override string Description()
+        {
+            return Data.IsCompany ? "Company-wide ISP for " + Data.CompanyName : "ISP service for " + Data.ProductName;
+        }
 
         public override string Title() { return "ISP"; }
 
@@ -95,6 +100,12 @@ namespace ISPBusiness
 
         public static bool IsIspId(uint id) { return id >= IdBase; }
 
+        /// <summary>True when the deal is in the vanilla window as an active deal (so vanilla pays it).</summary>
+        public static bool IsShown(IspDeal d)
+        {
+            return Shown.TryGetValue(d, out IspVanillaDeal v) && v.Active && v.Client != null;
+        }
+
         public static void Reset()
         {
             Shown.Clear();
@@ -123,6 +134,7 @@ namespace ISPBusiness
                 IspDeal d = kv.Key;
                 IspVanillaDeal v = kv.Value;
                 bool keep = d.Active ? (Deals.Active.Contains(d) && v.Active) : (Deals.IsOpenOffer(d) && !v.Active);
+                if (keep && Deals.ClientOf(d) != v.Client) keep = false; // product changed hands: show it with the new owner
                 if (!keep) Detach(w, d, v);
             }
 
@@ -197,10 +209,20 @@ namespace ISPBusiness
         public static void Describe(IspVanillaDeal v, List<string> vars, List<string> values)
         {
             IspDeal d = v.Data;
-            Add(vars, values, "Type", "ISP service");
-            Add(vars, values, "Product", d.ProductName);
+            if (d.IsCompany)
+            {
+                Add(vars, values, "Type".Loc(), "Company-wide ISP service");
+                Add(vars, values, "Covers", "All products of " + d.CompanyName + ", now and later, and its development");
+            }
+            else
+            {
+                Add(vars, values, "Type".Loc(), "ISP service");
+                Add(vars, values, "Product", d.ProductName);
+            }
+            Add(vars, values, "IncomeperMbperhour".Loc(), v.Worth().Currency());
             Add(vars, values, "Price per Mbps per month", ((float)d.Rate).Currency());
             Add(vars, values, "Bandwidth needed now", IspNetwork.Describe(d.EstimatedMbps));
+            if (d.IsCompany) Add(vars, values, "Of which development", IspNetwork.Describe(d.DevMbps));
             Add(vars, values, "Income per month now", ((float)(d.Rate * d.EstimatedMbps)).Currency());
             if (!d.Active)
             {

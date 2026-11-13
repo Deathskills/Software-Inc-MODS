@@ -161,6 +161,7 @@ namespace ISPBusiness
 
                 if (!_iconTried) { _iconTried = true; _icon = LoadIcon(); }
                 IspWindow.EnsureButton(_icon);
+                IspWindow.EnsureServerWindowColumn();
                 IspWindow.Tick();
                 Net.Tick();
                 VanillaDeals.Sync();

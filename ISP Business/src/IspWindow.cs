@@ -1,8 +1,9 @@
 // ISP Business - the ISP window (spec 18). Opened from a button on the bottom bar.
-//  - Network tab: every server group of your company in the same table style as the vanilla Servers
-//    window (status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback,
-//    select fallback, view), plus a Switch mode button. Below it, the ISP processes on the selected
-//    pool, with "Move selected processes" like vanilla.
+//  - Your ISP pools only, in the same table style as the vanilla Servers window (status, colour, name,
+//    bandwidth, servers, load, processes, electricity, fallback, select fallback, view), with a
+//    "Back to hosting" button. "Add server group" turns a hosting group into a pool. Below it, the ISP
+//    processes on the selected pool, with "Move selected processes" like vanilla.
+//  - The vanilla Servers window gets an "ISP mode" button column too (EnsureServerWindowColumn).
 //  - ISP offers and deals are in the vanilla Deals window (VanillaDeals.cs); the "Deals window" button opens it.
 //    Move a deal to another pool from the process list here.
 // Vanilla columns are reused by key from GUIListView.ColumnDefinitions, so they behave like vanilla.
@@ -51,6 +52,7 @@ namespace ISPBusiness
             _netPanel = null;
             _summary = _procLabel = null;
             _groups = _procs = null;
+            _serverList = null;
             _button = null;
             _groupsKey = _procsKey = null;
             _pendingColumns.Clear();
@@ -145,7 +147,8 @@ namespace ISPBusiness
             if (rt != null) rt.sizeDelta = new Vector2(1180f, 640f);
             GameObject main = _window.MainPanel;
 
-            MakeButton("Deals window", main, new Rect(8f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
+            MakeButton("Add server group", main, new Rect(8f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), AddGroup);
+            MakeButton("Deals window", main, new Rect(172f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
 
             _netPanel = WindowManager.SpawnPanel();
             Place(_netPanel.gameObject, main, 0f, 50f, 0f, 0f);
@@ -176,9 +179,9 @@ namespace ISPBusiness
                 { "IspBandwidth", new GUIListView.ColumnDefinition<ServerGroup>("Bandwidth", (ServerGroup g) => (object)IspNetwork.Describe(Bandwidth(g)), (ServerGroup g) => (float)Bandwidth(g), true, 95f) },
                 { "IspLoad", new GUIListView.ColumnDefinition<ServerGroup>("Load", (ServerGroup g) => LoadOf(g), true, 80f, currency: false, includeDecimal: true, progressBar: true, withTotal: false) },
                 { "IspProcs", new GUIListView.ColumnDefinition<ServerGroup>("Processes", (ServerGroup g) => ProcessCount(g), true, 85f) },
-                { "IspSwitch", new GUIListView.ColumnDefinition<ServerGroup>("Switch mode", (ServerGroup g) => TogglePool(g.Name), 110f) },
+                { "IspSwitch", new GUIListView.ColumnDefinition<ServerGroup>("Back to hosting", (ServerGroup g) => TogglePool(g.Name), 120f) },
             };
-            _groups = MakeList(p, gdefs, new[] { "IspStatus", "SrvColor", "SrvName", "IspMode", "IspBandwidth", "SrvServers", "IspLoad", "IspProcs", "SrvWatt", "SrvFallback", "SrvSelectFallback", "SrvView", "IspSwitch" });
+            _groups = MakeList(p, gdefs, new[] { "IspStatus", "SrvColor", "SrvName", "IspBandwidth", "SrvServers", "IspLoad", "IspProcs", "SrvWatt", "SrvFallback", "SrvSelectFallback", "SrvView", "IspSwitch" });
             Place(_groups.gameObject, p, 8f, 92f, 8f, 4f, 0f, 0f, 1f, 0.6f);
             _groups.OnSelectChange = (bool direct) => { _procsKey = null; RefreshProcesses(); };
 
@@ -217,7 +220,7 @@ namespace ISPBusiness
         {
             GameSettings gs = GameSettings.Instance;
             if (gs == null) return new List<ServerGroup>();
-            return gs.GetAllServerGroups(false, false).Where(g => g != null && g.CloudProvider == 0).ToList();
+            return gs.GetAllServerGroups(false, false).Where(g => g != null && g.CloudProvider == 0 && IspNetwork.IsPool(g)).ToList();
         }
 
         private static void Refresh()
@@ -244,7 +247,7 @@ namespace ISPBusiness
               .Append("   <b>Income this month:</b> ").Append(Money(IspNetwork.MonthRevenue))
               .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
               .Append("   <b>Transit this month:</b> ").Append(Money(IspNetwork.MonthTransit)).Append('\n');
-            sb.Append("<i>A group in ISP mode can't host processes. If one server breaks, the group is down and its ISP processes follow its fallback.</i>");
+            sb.Append("<i>Only ISP pools are listed. Add one with \"Add server group\" or the ISP mode button in the Servers window. If one server breaks, the pool is down and its ISP processes follow its fallback.</i>");
             _summary.text = sb.ToString();
 
             List<ServerGroup> groups = OwnGroups();
@@ -332,15 +335,68 @@ namespace ISPBusiness
 
         // ---------- actions
 
-        private static void TogglePool(string name)
+        /// <summary>Picker of hosting groups that can become ISP pools.</summary>
+        private static void AddGroup()
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (gs == null) return;
+            List<ServerGroup> all = gs.GetAllServerGroups(false, false).Where(g => g != null && g.CloudProvider == 0 && !IspNetwork.IsPool(g)).ToList();
+            List<ServerGroup> ok = all.Where(g => IspNetwork.CannotBePool(g) == null).OrderBy(g => g.Name, StringComparer.Ordinal).ToList();
+            if (ok.Count == 0)
+            {
+                WindowManager.SpawnDialog(all.Count == 0
+                    ? "You have no other server groups. Build servers and give them a group first."
+                    : "None of your hosting groups can become an ISP pool: a group must have servers and no processes on it. Move its processes off in the Servers window first.",
+                    false, DialogWindow.DialogType.Warning);
+                return;
+            }
+            var labels = ok.Select(g => g.Name + " (ISP capacity " + IspNetwork.Describe(g.Servers.OfType<Server>().Sum(s => (double)Config.ForServer(s.Power, s.GetComponent<Furniture>() != null ? s.GetComponent<Furniture>().Wattage : 0f).IspCapacity)) + ")");
+            WindowManager.Instance.MultiWindow.Show("Server group for ISP", labels, (int i) =>
+            {
+                if (i < 0 || i >= ok.Count) return;
+                TogglePool(ok[i].Name);
+            }, false);
+        }
+
+        // ---------- vanilla Servers window: "ISP mode" button column
+
+        private static GUIListView _serverList;
+
+        /// <summary>Adds an "ISP mode" button to each row of the vanilla Servers window, once per window.</summary>
+        public static void EnsureServerWindowColumn()
+        {
+            ServerWindow sw = HUD.Instance != null ? HUD.Instance.serverWindow : null;
+            GUIListView list = sw != null ? sw.ServerList : null;
+            if (list == null || list == _serverList) return;
+            _serverList = list;
+            const string key = "IspModeBtn", header = "ISP mode";
+            var def = new GUIListView.ColumnDefinition<ServerGroup>(header, (ServerGroup g) => { if (Hooks.Enabled && g != null) TogglePool(g.Name, true); }, 90f);
+            list.ColumnDefinitions[key] = def;
+            if (list.GUIColumns == null || list.GUIColumns.Count == 0)
+            {
+                // Not started yet: its Start() adds every key in Columns.
+                if (list.Columns != null && !list.Columns.Contains(key)) list.Columns = list.Columns.Concat(new[] { key }).ToArray();
+            }
+            else if (list[header] == null)
+            {
+                list.AddColumn(def);
+                list.UpdateElements();
+            }
+        }
+
+        private static void TogglePool(string name, bool confirm = false)
         {
             GameSettings gs = GameSettings.Instance;
             ServerGroup g = gs != null ? gs.GetServerGroup(name) : null;
             bool isp = !IspNetwork.IsPool(g);
             if (!IspNetwork.SetPool(g, isp, out string error))
                 WindowManager.SpawnDialog(error, false, DialogWindow.DialogType.Warning);
+            else if (confirm)
+                WindowManager.SpawnDialog(isp
+                    ? "\"" + name + "\" is now an ISP pool. Manage it in the ISP Network window. Press ISP mode again to put it back to hosting."
+                    : "\"" + name + "\" is back to hosting.", false, DialogWindow.DialogType.Information);
             _groupsKey = _procsKey = null;
-            Refresh();
+            if (_window != null) Refresh();
         }
 
         private static void MoveSelected()

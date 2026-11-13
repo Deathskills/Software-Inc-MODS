@@ -20,6 +20,7 @@ namespace ISPBusiness
     {
         public const byte MsgHello = 1;
         public const byte MsgClaim = 2;   // product id + 1 = claim / 0 = release, decided by the sender
+        public const byte MsgCompanyClaim = 3;   // company id + 1 = claim / 0 = release (company-wide deal)
 
         public static ModController.DLLMod Mod;
         public static bool Registered;
@@ -150,6 +151,12 @@ namespace ISPBusiness
                     bool claim = pos < m.Data.Length && m.Data[pos++] == 1;
                     Deals.OnRemoteClaim(m.From, product, claim);
                     break;
+                case MsgCompanyClaim:
+                    if (!PeerCompatible(m.From)) break;
+                    uint company = (uint)ReadInt(m.Data, ref pos);
+                    bool cclaim = pos < m.Data.Length && m.Data[pos++] == 1;
+                    Deals.OnRemoteCompanyClaim(m.From, company, cclaim);
+                    break;
             }
         }
 
@@ -158,19 +165,29 @@ namespace ISPBusiness
         {
             GameSettings gs = GameSettings.Instance;
             if (!Registered || gs == null || !gs.IsNetworkMode) return;
-            try { Mod.SendNetworkMessage(ClaimBytes(productId, claim), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
+            try { Mod.SendNetworkMessage(ClaimBytes(MsgClaim, productId, claim), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
+        }
+
+        /// <summary>Tells every other player that we took (or released) a company-wide ISP deal.</summary>
+        public static void BroadcastCompanyClaim(uint companyId, bool claim)
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (!Registered || gs == null || !gs.IsNetworkMode) return;
+            try { Mod.SendNetworkMessage(ClaimBytes(MsgCompanyClaim, companyId, claim), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
             catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
         }
 
         private static void SendClaimsTo(byte target)
         {
-            foreach (uint id in Deals.MyClaims().ToList()) Send(ClaimBytes(id, true), target);
+            foreach (uint id in Deals.MyClaims().ToList()) Send(ClaimBytes(MsgClaim, id, true), target);
+            foreach (uint id in Deals.MyCompanyClaims().ToList()) Send(ClaimBytes(MsgCompanyClaim, id, true), target);
         }
 
-        private static byte[] ClaimBytes(uint productId, bool claim)
+        private static byte[] ClaimBytes(byte type, uint id, bool claim)
         {
-            var b = new List<byte> { MsgClaim };
-            WriteInt(b, unchecked((int)productId));
+            var b = new List<byte> { type };
+            WriteInt(b, unchecked((int)id));
             b.Add(claim ? (byte)1 : (byte)0);
             return b.ToArray();
         }
