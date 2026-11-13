@@ -5,6 +5,8 @@
 //  - TimeOfDay.UpdateHour (private): prefix records ServerCost, postfix runs the ISP hour.
 //  - ServerGroup.RefreshUsage: postfix puts back ISP power use after vanilla resets it.
 //  - GameSettings.ChangeServerName: postfix keeps a renamed ISP pool in ISP mode.
+//  - DealWindow.Serialize: postfix leaves ISP deals out of the vanilla save (they're in the mod's data).
+//  - BuilderDetailPanel.SetFurniture: postfix adds the ISP bandwidth to a server's Bandwidth line in the shop.
 using System;
 using UnityEngine;
 
@@ -60,6 +62,25 @@ namespace ISPBusiness
             catch (Exception e) { ReportError("pool rename", e); }
         }
 
+        /// <summary>Appends "ISP: x" to the vanilla Bandwidth bar of a server in the furniture shop panel.</summary>
+        public static void ShopPanel(BuilderDetailPanel panel, Furniture furn)
+        {
+            if (furn.Type == null || !furn.Type.Equals("Server")) return;
+            Server s = furn.GetComponent<Server>();
+            if (s == null || panel.ProgressBars == null) return;
+            Config.Equipment eq = Config.ForServer(s.Power, furn.Wattage);
+            string prefix = "Bandwidth".Loc();
+            foreach (GameObject bar in panel.ProgressBars)
+            {
+                if (bar == null) continue;
+                UnityEngine.UI.Text t = bar.GetComponentInChildren<UnityEngine.UI.Text>();
+                if (t == null || t.text == null || !t.text.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                if (t.text.Contains("ISP")) return;
+                t.text += "   ISP: " + IspNetwork.Describe(eq.IspCapacity);
+                return;
+            }
+        }
+
         private static void ReportError(string what, Exception e)
         {
             _errors++;
@@ -90,6 +111,30 @@ namespace ISPBusiness
     {
         [HarmonyLib.HarmonyPriority(HarmonyLib.Priority.Low)]
         public static void Postfix(object[] __args) { Hooks.AfterRename(__args); }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(DealWindow), "Serialize")]
+    public static class DealSavePatch
+    {
+        // Runs even when Hooks.Enabled is off: ISP deals must never reach a save.
+        [HarmonyLib.HarmonyPriority(HarmonyLib.Priority.Last)]
+        public static void Postfix(DealWindow __instance, WriteDictionary dict)
+        {
+            try { VanillaDeals.FilterSave(__instance, dict); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Could not filter ISP deals out of the save: " + e); }
+        }
+    }
+
+    [HarmonyLib.HarmonyPatch(typeof(BuilderDetailPanel), "SetFurniture")]
+    public static class ShopPanelPatch
+    {
+        [HarmonyLib.HarmonyPriority(HarmonyLib.Priority.Low)]
+        public static void Postfix(BuilderDetailPanel __instance, Furniture furn)
+        {
+            if (!Hooks.Enabled || __instance == null || furn == null) return;
+            try { Hooks.ShopPanel(__instance, furn); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Shop panel: " + e.Message); }
+        }
     }
 
     /// <summary>Only this class calls Harmony directly. Calls into it are wrapped in try/catch.</summary>

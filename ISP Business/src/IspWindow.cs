@@ -3,7 +3,8 @@
 //    window (status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback,
 //    select fallback, view), plus a Switch mode button. Below it, the ISP processes on the selected
 //    pool, with "Move selected processes" like vanilla.
-//  - Services tab: ISP offers (accept / decline) and active ISP deals (performance, pool, cancel).
+//  - ISP offers and deals are in the vanilla Deals window (VanillaDeals.cs); the "Deals window" button opens it.
+//    Move a deal to another pool from the process list here.
 // Vanilla columns are reused by key from GUIListView.ColumnDefinitions, so they behave like vanilla.
 using System;
 using System.Collections.Generic;
@@ -18,14 +19,12 @@ namespace ISPBusiness
     public static class IspWindow
     {
         private static GUIWindow _window;
-        private static RectTransform _netPanel, _svcPanel;
-        private static Text _summary, _procLabel, _svcSummary;
-        private static GUIListView _groups, _procs, _offers, _deals;
+        private static RectTransform _netPanel;
+        private static Text _summary, _procLabel;
+        private static GUIListView _groups, _procs;
         private static MainBottomButton _button;
-        private static ButtonCounter _counter;
         private static float _nextRefresh;
-        private static string _groupsKey, _procsKey, _offersKey, _dealsKey;
-        private static bool _servicesTab;
+        private static string _groupsKey, _procsKey;
         private static readonly List<KeyValuePair<GUIListView, string[]>> _pendingColumns = new List<KeyValuePair<GUIListView, string[]>>();
 
         // ---------- bottom-bar button
@@ -35,10 +34,9 @@ namespace ISPBusiness
             if (_button != null || HUD.Instance == null) return;
             try
             {
-                _button = HUD.Instance.AddBottomButton("ISP", "ISP Network", "Your ISP pools, ISP processes, offers and deals.", icon);
+                _button = HUD.Instance.AddBottomButton("ISP", "ISP Network", "Your ISP pools and ISP processes. ISP offers and deals are in the Deals window.", icon);
                 Button b = _button.GetComponent<Button>() ?? _button.GetComponentInChildren<Button>();
                 if (b != null) b.onClick.AddListener(Toggle);
-                _counter = HUD.Instance.AddButtonCounter(_button, "ISP offers");
             }
             catch (Exception e)
             {
@@ -50,12 +48,11 @@ namespace ISPBusiness
         public static void Forget()
         {
             _window = null;
-            _netPanel = _svcPanel = null;
-            _summary = _procLabel = _svcSummary = null;
-            _groups = _procs = _offers = _deals = null;
+            _netPanel = null;
+            _summary = _procLabel = null;
+            _groups = _procs = null;
             _button = null;
-            _counter = null;
-            _groupsKey = _procsKey = _offersKey = _dealsKey = null;
+            _groupsKey = _procsKey = null;
             _pendingColumns.Clear();
         }
 
@@ -67,7 +64,7 @@ namespace ISPBusiness
             {
                 if (IsOpen) { _window.Close(); return; }
                 if (_window == null) Build();
-                _groupsKey = _procsKey = _offersKey = _dealsKey = null;
+                _groupsKey = _procsKey = null;
                 _window.Show();
                 Refresh();
             }
@@ -148,31 +145,29 @@ namespace ISPBusiness
             if (rt != null) rt.sizeDelta = new Vector2(1180f, 640f);
             GameObject main = _window.MainPanel;
 
-            MakeButton("Network", main, new Rect(8f, 6f, 140f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(false));
-            MakeButton("Services", main, new Rect(152f, 6f, 140f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(true));
+            MakeButton("Deals window", main, new Rect(8f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
 
             _netPanel = WindowManager.SpawnPanel();
-            Place(_netPanel.gameObject, main, 0f, 40f, 0f, 0f);
-            _svcPanel = WindowManager.SpawnPanel();
-            Place(_svcPanel.gameObject, main, 0f, 40f, 0f, 0f);
+            Place(_netPanel.gameObject, main, 0f, 50f, 0f, 0f);
             BuildNetwork(_netPanel.gameObject);
-            BuildServices(_svcPanel.gameObject);
-            ShowTab(_servicesTab);
         }
 
-        private static void ShowTab(bool services)
+        private static void OpenDeals()
         {
-            _servicesTab = services;
-            if (_netPanel != null) _netPanel.gameObject.SetActive(!services);
-            if (_svcPanel != null) _svcPanel.gameObject.SetActive(services);
-            _groupsKey = _procsKey = _offersKey = _dealsKey = null;
-            if (_window != null) Refresh();
+            DealWindow w = HUD.Instance != null ? HUD.Instance.dealWindow : null;
+            if (w == null) return;
+            if (GameSettings.Instance.Difficulty.Deals < 0.5f)
+            {
+                WindowManager.SpawnDialog("Deals are turned off in this game's difficulty settings, so there are no ISP offers.", false, DialogWindow.DialogType.Warning);
+                return;
+            }
+            if (w.Window != null && !w.Window.Shown) w.Toggle();
         }
 
         private static void BuildNetwork(GameObject p)
         {
             _summary = MakeLabel(p);
-            PlaceTop(_summary.gameObject, p, 8f, 0f, 8f, 66f);
+            PlaceTop(_summary.gameObject, p, 8f, 0f, 8f, 88f);
 
             var gdefs = new Dictionary<string, GUIListView.ColumnDef>
             {
@@ -184,7 +179,7 @@ namespace ISPBusiness
                 { "IspSwitch", new GUIListView.ColumnDefinition<ServerGroup>("Switch mode", (ServerGroup g) => TogglePool(g.Name), 110f) },
             };
             _groups = MakeList(p, gdefs, new[] { "IspStatus", "SrvColor", "SrvName", "IspMode", "IspBandwidth", "SrvServers", "IspLoad", "IspProcs", "SrvWatt", "SrvFallback", "SrvSelectFallback", "SrvView", "IspSwitch" });
-            Place(_groups.gameObject, p, 8f, 70f, 8f, 4f, 0f, 0f, 1f, 0.6f);
+            Place(_groups.gameObject, p, 8f, 92f, 8f, 4f, 0f, 0f, 1f, 0.6f);
             _groups.OnSelectChange = (bool direct) => { _procsKey = null; RefreshProcesses(); };
 
             _procLabel = MakeLabel(p);
@@ -205,52 +200,11 @@ namespace ISPBusiness
             MakeButton("Move selected processes", p, new Rect(8f, -40f, -16f, 32f), new Rect(0f, 1f, 1f, 0f), MoveSelected);
         }
 
-        private static void BuildServices(GameObject p)
-        {
-            _svcSummary = MakeLabel(p);
-            PlaceTop(_svcSummary.gameObject, p, 8f, 0f, 8f, 44f);
-
-            var odefs = new Dictionary<string, GUIListView.ColumnDef>
-            {
-                { "IspOProduct", new GUIListView.ColumnDefinition<IspDeal>("Offer: product", (IspDeal d) => d.ProductName, true, 220f) },
-                { "IspOCompany", new GUIListView.ColumnDefinition<IspDeal>("Company", (IspDeal d) => d.CompanyName, true, 160f) },
-                { "IspONeeds", new GUIListView.ColumnDefinition<IspDeal>("Needs now", (IspDeal d) => (object)IspNetwork.Describe(d.EstimatedMbps), (IspDeal d) => (float)d.EstimatedMbps, true, 100f) },
-                { "IspORate", new GUIListView.ColumnDefinition<IspDeal>("Price per Mbps", (IspDeal d) => (float)d.Rate, true, 110f) },
-                { "IspOMonthly", new GUIListView.ColumnDefinition<IspDeal>("Per month now", (IspDeal d) => (float)(d.Rate * d.EstimatedMbps), true, 120f) },
-                { "IspOExpires", new GUIListView.ColumnDefinition<IspDeal>("Expires in", (IspDeal d) => MonthsLeft(d), true, 100f) },
-                { "IspOAccept", new GUIListView.ColumnDefinition<IspDeal>("Accept", (IspDeal d) => AcceptOffer(d), 80f) },
-                { "IspODecline", new GUIListView.ColumnDefinition<IspDeal>("Decline", (IspDeal d) => { Deals.Decline(d); _offersKey = null; Refresh(); }, 80f) },
-            };
-            _offers = MakeList(p, odefs, new[] { "IspOProduct", "IspOCompany", "IspONeeds", "IspORate", "IspOMonthly", "IspOExpires", "IspOAccept", "IspODecline" });
-            Place(_offers.gameObject, p, 8f, 48f, 8f, 4f, 0f, 0f, 1f, 0.45f);
-
-            var ddefs = new Dictionary<string, GUIListView.ColumnDef>
-            {
-                { "IspDProduct", new GUIListView.ColumnDefinition<IspDeal>("Deal: product", (IspDeal d) => d.ProductName, true, 200f) },
-                { "IspDCompany", new GUIListView.ColumnDefinition<IspDeal>("Company", (IspDeal d) => d.CompanyName, true, 140f) },
-                { "IspDDemand", new GUIListView.ColumnDefinition<IspDeal>("Bandwidth", (IspDeal d) => (object)IspNetwork.Describe(d.EstimatedMbps), (IspDeal d) => (float)d.EstimatedMbps, true, 95f) },
-                { "IspDNow", new GUIListView.ColumnDefinition<IspDeal>("Delivered now", (IspDeal d) => DeliveredShare(d), true, 100f, currency: false, includeDecimal: true, progressBar: true, withTotal: false) },
-                { "IspDLast", new GUIListView.ColumnDefinition<IspDeal>("Last month", (IspDeal d) => (float)d.LastFulfilment, true, 90f, currency: false, includeDecimal: true, progressBar: true, withTotal: false) },
-                { "IspDPerf", new GUIListView.ColumnDefinition<IspDeal>("Performance", (IspDeal d) => d.Performance.ToString("0.00", CultureInfo.InvariantCulture), true, 95f) },
-                { "IspDRate", new GUIListView.ColumnDefinition<IspDeal>("Price per Mbps", (IspDeal d) => (float)d.Rate, true, 105f) },
-                { "IspDTotal", new GUIListView.ColumnDefinition<IspDeal>("Earned", (IspDeal d) => (float)d.TotalRevenue, true, 100f) },
-                { "IspDPool", new GUIListView.ColumnDefinition<IspDeal>("Pool", (IspDeal d) => IspNetwork.GetAssignment(d.Key) ?? "None", true, 110f) },
-                { "IspDMove", new GUIListView.ColumnDefinition<IspDeal>("Change pool", (IspDeal d) => PickPool(new[] { d.Key }), 100f) },
-                { "IspDCancel", new GUIListView.ColumnDefinition<IspDeal>("Cancel", (IspDeal d) => ConfirmCancel(d), 80f) },
-            };
-            _deals = MakeList(p, ddefs, new[] { "IspDProduct", "IspDCompany", "IspDDemand", "IspDNow", "IspDLast", "IspDPerf", "IspDRate", "IspDTotal", "IspDPool", "IspDMove", "IspDCancel" });
-            Place(_deals.gameObject, p, 8f, 4f, 8f, 8f, 0f, 0.45f, 1f, 1f);
-        }
-
         // ---------- refresh
 
         /// <summary>Called every frame by the behaviour; refreshes the open window twice a second.</summary>
         public static void Tick()
         {
-            if (_counter != null)
-            {
-                try { _counter.SetNumber(Deals.Offers.Count); } catch (Exception) { _counter = null; }
-            }
             if (!IsOpen) return;
             EnsureColumns();
             if (Time.unscaledTime < _nextRefresh) return;
@@ -269,8 +223,7 @@ namespace ISPBusiness
         private static void Refresh()
         {
             if (_window == null) return;
-            if (_servicesTab) RefreshServices();
-            else RefreshNetwork();
+            RefreshNetwork();
         }
 
         private static void RefreshNetwork()
@@ -287,6 +240,10 @@ namespace ISPBusiness
               .Append(IspNetwork.Describe(own.Delivered)).Append(" through your ISP")
               .Append("   <b>Saved this month:</b> ").Append(Money(IspNetwork.MonthSavings))
               .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthSavings)).Append('\n');
+            sb.Append("<b>ISP deals:</b> ").Append(Deals.Active.Count)
+              .Append("   <b>Income this month:</b> ").Append(Money(IspNetwork.MonthRevenue))
+              .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
+              .Append("   <b>Transit this month:</b> ").Append(Money(IspNetwork.MonthTransit)).Append('\n');
             sb.Append("<i>A group in ISP mode can't host processes. If one server breaks, the group is down and its ISP processes follow its fallback.</i>");
             _summary.text = sb.ToString();
 
@@ -328,22 +285,6 @@ namespace ISPBusiness
             _procsKey = key;
             _procs.Items.Clear();
             _procs.Items.AddRange(list.Cast<object>());
-        }
-
-        private static void RefreshServices()
-        {
-            var sb = new StringBuilder();
-            sb.Append("<b>Offers:</b> ").Append(Deals.Offers.Count).Append("   <b>Active deals:</b> ").Append(Deals.Active.Count)
-              .Append("   <b>ISP income this month:</b> ").Append(Money(IspNetwork.MonthRevenue))
-              .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
-              .Append("   <b>Transit this month:</b> ").Append(Money(IspNetwork.MonthTransit)).Append('\n');
-            sb.Append("<i>AI companies offer ISP deals each month (receptionist needed). Prices are locked when offered. Performance drops when you deliver less than they need.</i>");
-            _svcSummary.text = sb.ToString();
-
-            string ok = string.Join("|", Deals.Offers.Select(x => x.Id.ToString(CultureInfo.InvariantCulture)).ToArray());
-            if (ok != _offersKey) { _offers.Items.Clear(); _offers.Items.AddRange(Deals.Offers.Cast<object>()); _offersKey = ok; }
-            string dk = string.Join("|", Deals.Active.Select(x => x.Id.ToString(CultureInfo.InvariantCulture)).ToArray());
-            if (dk != _dealsKey) { _deals.Items.Clear(); _deals.Items.AddRange(Deals.Active.Cast<object>()); _dealsKey = dk; }
         }
 
         // ---------- column values
@@ -389,17 +330,6 @@ namespace ISPBusiness
             }
         }
 
-        private static float DeliveredShare(IspDeal d)
-        {
-            return IspNetwork.Processes.TryGetValue(d.Key, out IspProcess p) && p.Demand > 0 ? (float)(p.Delivered / p.Demand) : 1f;
-        }
-
-        private static string MonthsLeft(IspDeal d)
-        {
-            double left = Config.OfferLifetimeMonths - GameClock.MonthsBetween(d.OfferedAt, GameClock.Stamp);
-            return Math.Max(0, Math.Ceiling(left)).ToString("0", CultureInfo.InvariantCulture) + " months";
-        }
-
         // ---------- actions
 
         private static void TogglePool(string name)
@@ -443,25 +373,9 @@ namespace ISPBusiness
                 foreach (string k in keys) IspNetwork.SetAssignment(k, i < 0 ? null : pools[i]);
                 IspNetwork.Recalculate();
                 IspNetwork.ApplyPower();
-                _procsKey = _dealsKey = null;
+                _procsKey = null;
                 Refresh();
             }, true);
-        }
-
-        private static void AcceptOffer(IspDeal d)
-        {
-            if (!Deals.Accept(d, out string error))
-                WindowManager.SpawnDialog(error, false, DialogWindow.DialogType.Warning);
-            _offersKey = _dealsKey = _procsKey = null;
-            Refresh();
-        }
-
-        private static void ConfirmCancel(IspDeal d)
-        {
-            DialogWindow dlg = WindowManager.SpawnDialog();
-            dlg.Show("Cancel the ISP deal for " + d.ProductName + "? Cancelling costs business reputation.", false, DialogWindow.DialogType.Question,
-                new KeyValuePair<string, Action>("Cancel deal", () => { Deals.Cancel(d); _dealsKey = _procsKey = null; Refresh(); }),
-                new KeyValuePair<string, Action>("Keep it", () => { }));
         }
 
         private static string Money(double v)

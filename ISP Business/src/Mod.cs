@@ -2,7 +2,8 @@
 //  - switch vanilla server groups to ISP mode (ISP pools) with their own capacity and power use
 //  - your company's own internet traffic goes through your pools: vanilla ISP rate replaced by transit
 //  - idle ISP capacity draws little power and wears slowly
-//  - AI products offer ISP deals each month; deals pay per delivered Mbps, with performance and reputation
+//  - AI products offer ISP deals each month in the vanilla Deals window; deals pay per delivered Mbps,
+//    with performance and reputation
 //  - multiplayer: each player runs their own ISP; version handshake and deal claims between players
 // Requires 0HarmonyLoader (Harmony 2.3.3). Without it the mod stays off.
 using System;
@@ -76,6 +77,8 @@ namespace ISPBusiness
         public override void OnDeactivate()
         {
             _active = false;
+            // Take ISP deals out of the vanilla Deals window first, while the save filter is still patched.
+            try { VanillaDeals.RemoveAll(); } catch (Exception e) { Debug.LogError("[ISP Business] " + e); }
             Hooks.Enabled = false;
             // Put every ISP server back to vanilla power and wear before unpatching.
             foreach (string name in IspNetwork.Pools.ToArray())
@@ -140,7 +143,7 @@ namespace ISPBusiness
             if (!_active || !Patched) return;
             if (GameSettings.Instance.IsReferenceNull() || TimeOfDay.Instance.IsReferenceNull() || HUD.Instance.IsReferenceNull())
             {
-                if (_seenGame != null) { _seenGame = null; IspWindow.Forget(); }
+                if (_seenGame != null) { _seenGame = null; IspWindow.Forget(); VanillaDeals.Reset(); }
                 return;
             }
             try
@@ -150,6 +153,7 @@ namespace ISPBusiness
                     _seenGame = GameSettings.Instance;
                     IspNetwork.Reset();
                     Deals.Reset();
+                    VanillaDeals.Reset();
                     Net.ResetSession();
                     IspWindow.Forget();
                     ApplyPending();
@@ -159,6 +163,7 @@ namespace ISPBusiness
                 IspWindow.EnsureButton(_icon);
                 IspWindow.Tick();
                 Net.Tick();
+                VanillaDeals.Sync();
 
                 if (IspNetwork.PendingNotices.Count > 0)
                 {

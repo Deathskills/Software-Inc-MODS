@@ -6,9 +6,11 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 
 **ISP Network window**
 - Open it from its button on the bottom bar. The counter on the button shows open ISP offers.
-- **Network tab:** all your server groups in the same table as the vanilla Servers window: status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback, Select fallback and View (moves the camera to the servers). A **Switch mode** button turns a group into an ISP pool or back to hosting.
+- All your server groups in the same table as the vanilla Servers window: status, colour, name, mode, bandwidth, servers, load, processes, electricity, fallback, Select fallback and View (moves the camera to the servers). A **Switch mode** button turns a group into an ISP pool or back to hosting.
 - Below the table are the ISP processes on the selected pool: your company's internet and one per ISP deal. Use **Move selected processes** to move them to another pool, like vanilla.
-- **Services tab:** ISP offers from AI companies (Accept / Decline) and your active ISP deals (delivered share, last month, Performance, price, earnings, pool, Change pool, Cancel).
+- The **Deals window** button opens the vanilla Deals window, where ISP offers and deals live (see below).
+
+**Furniture shop:** a server's Bandwidth line also shows its ISP bandwidth, e.g. "Bandwidth: 1 Gbps   ISP: 15 Gbps".
 
 **ISP pools**
 - Any of your server groups with nothing assigned to it can be switched to ISP mode. It's then an ISP pool.
@@ -40,6 +42,8 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 
 **ISP deals with AI companies**
 - Each month, up to 10 AI products that need at least 1 Mbps offer you an ISP deal, ranked by value. You need a receptionist, and deals must be on in the difficulty settings.
+- Offers show up in the vanilla **Deals window** under Incoming deals (description "ISP service for ...") at the receptionist's time, and accepted ones under Active deals. Accept, Reject and Cancel work as for vanilla deals. The details panel shows the price per Mbps, the bandwidth needed, the monthly income, and for active deals the delivered share, Performance, pool and earnings. The "Offer" column is the monthly income at the current need.
+- ISP deals are kept out of the vanilla part of the save and stored in the mod's own data, so a save still loads after you remove the mod (the ISP deals are simply gone then).
 - Price: $11.45 per Mbps per month × the vanilla business-star multiplier (1.05 at 0 stars up to 1.25 at 6 stars). It's locked when the offer is made.
 - Offers stay open for 24 months. A declined product isn't offered again for 6 months.
 - An accepted deal goes to the pool with the most spare capacity. You're paid every hour for the Mbps you actually deliver, and you pay transit on it.
@@ -70,7 +74,7 @@ Without 0HarmonyLoader the mod stays off.
   - `TimeOfDay.UpdateHour`
   - `ServerGroup.RefreshUsage`
   - `GameSettings.ChangeServerName`
-- **Server Hosting Business:** compatible. The two mods patch different methods. This mod never changes `Server.GetISPCost` (which hosting prices use), hosting deals, product bandwidth or the vanilla deal list. ISP deals only read product bandwidth, so they follow Server Hosting Business's curves when it's installed.
+- **Server Hosting Business:** compatible. The two mods patch different methods. This mod never changes `Server.GetISPCost` (which hosting prices use), hosting deals or product bandwidth, and its deals use their own id range in the Deals window. ISP deals only read product bandwidth, so they follow Server Hosting Business's curves when it's installed.
 - **Realistic Population growth:** compatible. Nothing population-related is touched.
 - Uses none of the namespaces or types the game blocks for mods, so it doesn't need the "all access" prompt.
 - ISP data is stored only as text in the save's mod data, and no custom objects go into the save. Removing the mod returns ISP pools to normal server groups.

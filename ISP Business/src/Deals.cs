@@ -3,7 +3,8 @@
 //  - Each month, up to 10 AI products that need internet (>= 1 Mbps) offer an ISP deal, ranked by value.
 //    You need a receptionist, as for vanilla deals, and deals must be on in the difficulty settings.
 //  - The price per Mbps is locked when the offer is made: $11.45 x the vanilla business-star multiplier.
-//  - An offer stays open for 24 months. Accept or decline it in the ISP window.
+//  - An offer stays open for 24 months. It appears in the vanilla Deals window (Incoming deals) at the
+//    receptionist's time, like a business guest. Accept or reject it there (see VanillaDeals.cs).
 //  - An accepted deal becomes an ISP process on one of your pools. You're paid every hour for the Mbps
 //    you actually deliver, and you pay wholesale transit on it. Electricity comes from your servers.
 //  - Performance starts at 1.0 and changes monthly with delivered/requested bandwidth (spec 13.3).
@@ -13,7 +14,8 @@
 //  - Multiplayer: offers are made on each player's own machine. When a player accepts, they tell the
 //    others (claim), so nobody else is offered or keeps that product. Ties go to the lower player id.
 //    Claims are re-sent to players who join, and dropped when a player leaves.
-// Nothing here goes into the vanilla deal list, so saves stay loadable without the mod.
+// The vanilla Deals window shows these deals, but they are left out of the vanilla save (VanillaDeals.cs),
+// so saves stay loadable without the mod.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,6 +39,17 @@ namespace ISPBusiness
         public double TotalRevenue;
         public double LastFulfilment = 1.0;
         public double EstimatedMbps;   // demand when offered (offers) / last hour (deals)
+        public int ShowAt;             // stamp when the offer appears in the Deals window (receptionist time)
+
+        /// <summary>Performance change this month would give at the current fulfilment (for the vanilla Performance column).</summary>
+        public double PerfTrend
+        {
+            get
+            {
+                double f = MonthDemand > 0 ? Math.Min(1.0, MonthDelivered / MonthDemand) : LastFulfilment;
+                return Config.PerformanceChange(f);
+            }
+        }
 
         public bool Active { get { return AcceptedAt != 0; } }
         public string Key { get { return "deal:" + Id; } }
@@ -98,6 +111,19 @@ namespace ISPBusiness
         {
             if (p == null || p.Userbase <= 0) return 0;
             return p.GetLoadRequirement() * 1f.BandwidthFactor(SDateTime.Now());
+        }
+
+        /// <summary>The AI company that owns the product (the deal's client), or null.</summary>
+        public static Company ClientOf(IspDeal d)
+        {
+            SoftwareProduct p = Product(d.ProductId);
+            return p != null ? p.DevCompany : null;
+        }
+
+        /// <summary>True while an offer can still be accepted.</summary>
+        public static bool IsOpenOffer(IspDeal d)
+        {
+            return Offers.Contains(d) && !OtherClaims.ContainsKey(d.ProductId) && Product(d.ProductId) != null;
         }
 
         private static bool IsAiCustomer(SoftwareProduct p)
@@ -238,7 +264,8 @@ namespace ISPBusiness
             foreach (var c in candidates.OrderByDescending(x => x.Value))
             {
                 if (sent >= Config.ProductOffersPerMonth) break;
-                if (!DealWindow.FindReceptionTime().HasValue) break; // no receptionist with free time
+                SDateTime? reception = DealWindow.FindReceptionTime();
+                if (!reception.HasValue) break; // no receptionist
                 SoftwareProduct p = c.Key;
                 Offers.Add(new IspDeal
                 {
@@ -249,6 +276,7 @@ namespace ISPBusiness
                     Rate = Config.CorporateReferencePrice * Config.StarMultiplier(stars, UnityEngine.Random.value),
                     OfferedAt = now,
                     EstimatedMbps = DemandOf(p),
+                    ShowAt = reception.Value.ToInt(),
                 });
                 sent++;
             }
@@ -263,28 +291,31 @@ namespace ISPBusiness
                                   || Product(o.ProductId) == null || OtherClaims.ContainsKey(o.ProductId));
         }
 
-        // ---------- player actions
+        // ---------- player actions (from the vanilla Deals window)
 
-        public static bool Accept(IspDeal offer, out string error)
+        /// <summary>Vanilla Accept on an ISP offer. Vanilla has already checked StillValid(false).</summary>
+        public static void AcceptFromVanilla(IspDeal offer)
         {
-            error = null;
-            if (!Offers.Contains(offer)) { error = "This offer is no longer available."; return false; }
-            if (IspNetwork.Pools.Count == 0) { error = "You need an ISP pool first. Switch a server group to ISP mode on the Network tab."; return false; }
-            if (Product(offer.ProductId) == null || OtherClaims.ContainsKey(offer.ProductId))
-            {
-                Offers.Remove(offer);
-                error = "This product is no longer available for an ISP deal.";
-                return false;
-            }
-            Offers.Remove(offer);
+            if (!Offers.Remove(offer)) return;
             offer.AcceptedAt = Math.Max(1, GameClock.Stamp);
             Active.Add(offer);
-            IspNetwork.SetAssignment(offer.Key, IspNetwork.BestPool());
+            string pool = IspNetwork.BestPool();
+            IspNetwork.SetAssignment(offer.Key, pool);
             RefreshDemand();
             IspNetwork.Recalculate();
             IspNetwork.ApplyPower();
             Net.BroadcastClaim(offer.ProductId, true);
-            return true;
+            if (pool == null)
+                IspNetwork.PendingNotices.Add("You accepted the ISP deal for " + offer.ProductName + ", but you have no ISP pool, so it isn't served yet. " +
+                                              "Switch a server group to ISP mode in the ISP Network window, or its Performance will drop.");
+        }
+
+        /// <summary>Vanilla Reject (wasActive false) or Cancel (wasActive true). For a cancel, vanilla has
+        /// already applied ReputationEffect(true), which is CancelPenalty.</summary>
+        public static void CancelFromVanilla(IspDeal d, bool wasActive)
+        {
+            if (wasActive) End(d, null, false);
+            else Decline(d);
         }
 
         public static void Decline(IspDeal offer)
@@ -293,13 +324,11 @@ namespace ISPBusiness
             Declined[offer.ProductId] = GameClock.Stamp;
         }
 
-        /// <summary>Player cancels an active deal: reputation penalty scaled by deal size.</summary>
-        public static void Cancel(IspDeal d)
+        /// <summary>Reputation change (business stars) when the player cancels an active deal, scaled by size.</summary>
+        public static float CancelPenalty(IspDeal d)
         {
-            if (!Active.Contains(d)) return;
             double weight = Math.Min(1.0, Math.Sqrt(Math.Max(0, d.EstimatedMbps) / Config.RepReferenceMbps));
-            GameSettings.Instance.MyCompany.ChangeBusinessRep((float)(Config.RepCancel * Math.Max(0.1, weight)), "ISP");
-            End(d, null, false);
+            return (float)(Config.RepCancel * Math.Max(0.1, weight));
         }
 
         private static void End(IspDeal d, string notice, bool penalty)
@@ -360,7 +389,7 @@ namespace ISPBusiness
                 Pack.L(d.Id), Pack.L(d.ProductId), d.ProductName ?? "", d.CompanyName ?? "", Pack.D(d.Rate),
                 Pack.L(d.OfferedAt), Pack.L(d.AcceptedAt), Pack.D(d.Performance), Pack.D(d.MonthDemand),
                 Pack.D(d.MonthDelivered), Pack.L(d.LowSince), Pack.D(d.TotalRevenue), Pack.D(d.EstimatedMbps),
-                Pack.D(d.LastFulfilment),
+                Pack.D(d.LastFulfilment), Pack.L(d.ShowAt),
             })));
         }
 
@@ -381,6 +410,7 @@ namespace ISPBusiness
                     Performance = Pack.D(f[7]), MonthDemand = Pack.D(f[8]), MonthDelivered = Pack.D(f[9]),
                     LowSince = (int)Pack.L(f[10]), TotalRevenue = Pack.D(f[11]), EstimatedMbps = Pack.D(f[12]),
                     LastFulfilment = Pack.D(f[13]),
+                    ShowAt = f.Length > 14 ? (int)Pack.L(f[14]) : 0,
                 };
                 if (d.Id >= _nextId) _nextId = d.Id + 1;
                 (d.Active ? Active : Offers).Add(d);
