@@ -20,9 +20,10 @@ namespace ISPBusiness
     public static class IspWindow
     {
         private static GUIWindow _window;
-        private static RectTransform _netPanel;
-        private static Text _summary, _procLabel;
-        private static GUIListView _groups, _procs;
+        private static RectTransform _netPanel, _townPanel;
+        private static Text _summary, _procLabel, _townSummary;
+        private static GUIListView _groups, _procs, _towns;
+        private static bool _townsTab;
         private static MainBottomButton _button;
         private static float _nextRefresh;
         private static string _groupsKey, _procsKey;
@@ -49,9 +50,9 @@ namespace ISPBusiness
         public static void Forget()
         {
             _window = null;
-            _netPanel = null;
-            _summary = _procLabel = null;
-            _groups = _procs = null;
+            _netPanel = _townPanel = null;
+            _summary = _procLabel = _townSummary = null;
+            _groups = _procs = _towns = null;
             _serverList = null;
             _button = null;
             _groupsKey = _procsKey = null;
@@ -147,12 +148,93 @@ namespace ISPBusiness
             if (rt != null) rt.sizeDelta = new Vector2(1180f, 640f);
             GameObject main = _window.MainPanel;
 
-            MakeButton("Add server group", main, new Rect(8f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), AddGroup);
-            MakeButton("Deals window", main, new Rect(172f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
+            MakeButton("ISP pools", main, new Rect(8f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(false));
+            MakeButton("Towns", main, new Rect(142f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(true));
+            MakeButton("Add server group", main, new Rect(296f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), AddGroup);
+            MakeButton("Deals window", main, new Rect(460f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
 
             _netPanel = WindowManager.SpawnPanel();
             Place(_netPanel.gameObject, main, 0f, 50f, 0f, 0f);
             BuildNetwork(_netPanel.gameObject);
+            _townPanel = WindowManager.SpawnPanel();
+            Place(_townPanel.gameObject, main, 0f, 50f, 0f, 0f);
+            BuildTowns(_townPanel.gameObject);
+            ShowTab(_townsTab);
+        }
+
+        private static void ShowTab(bool towns)
+        {
+            _townsTab = towns;
+            if (_netPanel != null) _netPanel.gameObject.SetActive(!towns);
+            if (_townPanel != null) _townPanel.gameObject.SetActive(towns);
+            _groupsKey = _procsKey = null;
+            if (_window != null) Refresh();
+        }
+
+        private static void BuildTowns(GameObject p)
+        {
+            _townSummary = MakeLabel(p);
+            PlaceTop(_townSummary.gameObject, p, 8f, 0f, 8f, 66f);
+            Func<Settlement, double> pop = s => Municipal.Population(s.Type, GameClock.Year);
+            Func<Settlement, double> mine = s => Municipal.MyCoverage(s.Id);
+            Func<Settlement, double> demand = s => Municipal.DemandMbps(mine(s), GameClock.Year);
+            var defs = new Dictionary<string, GUIListView.ColumnDef>
+            {
+                { "IspTName", new GUIListView.ColumnDefinition<Settlement>("Settlement", (Settlement s) => s.Name, true, 150f) },
+                { "IspTType", new GUIListView.ColumnDefinition<Settlement>("Type", (Settlement s) => s.TypeName, true, 70f) },
+                { "IspTPop", new GUIListView.ColumnDefinition<Settlement>("Population", (Settlement s) => (object)Num(pop(s)), (Settlement s) => (float)pop(s), true, 110f) },
+                { "IspTMine", new GUIListView.ColumnDefinition<Settlement>("You cover", (Settlement s) => (object)Num(mine(s)), (Settlement s) => (float)mine(s), true, 100f) },
+                { "IspTOthers", new GUIListView.ColumnDefinition<Settlement>("Other players", (Settlement s) => (object)Num(Municipal.OthersCoverage(s.Id)), (Settlement s) => (float)Municipal.OthersCoverage(s.Id), true, 100f) },
+                { "IspTAvail", new GUIListView.ColumnDefinition<Settlement>("Available", (Settlement s) => (object)Num(Municipal.Available(s.Id)), (Settlement s) => (float)Municipal.Available(s.Id), true, 100f) },
+                { "IspTDemand", new GUIListView.ColumnDefinition<Settlement>("Your bandwidth", (Settlement s) => (object)IspNetwork.Describe(demand(s)), (Settlement s) => (float)demand(s), true, 110f) },
+                { "IspTPay", new GUIListView.ColumnDefinition<Settlement>("Coverage pay", (Settlement s) => (float)Municipal.CoveragePayment(mine(s)), true, 100f) },
+                { "IspTDeals", new GUIListView.ColumnDefinition<Settlement>("Deals", (Settlement s) => Deals.Active.Count(d => d.IsMunicipal && d.Settlement == s.Id), true, 60f) },
+                { "IspTService", new GUIListView.ColumnDefinition<Settlement>("Last month", (Settlement s) => mine(s) > 0 ? (float)Municipal.State(s.Id).LastFulfilment : 0f, true, 90f, currency: false, includeDecimal: true, progressBar: true, withTotal: false) },
+                { "IspTStatus", new GUIListView.ColumnDefinition<Settlement>("Status", (Settlement s) => TownStatus(s), true, 160f) },
+                { "IspTMerge", new GUIListView.ColumnDefinition<Settlement>("Consolidate", (Settlement s) => ConsolidateTown(s), 100f) },
+            };
+            _towns = MakeList(p, defs, new[] { "IspTName", "IspTType", "IspTPop", "IspTMine", "IspTOthers", "IspTAvail", "IspTDemand", "IspTPay", "IspTDeals", "IspTService", "IspTStatus", "IspTMerge" });
+            Place(_towns.gameObject, p, 8f, 70f, 8f, 8f);
+        }
+
+        private static string Num(double v) { return Math.Floor(v).ToString("N0", CultureInfo.InvariantCulture); }
+
+        private static string TownStatus(Settlement s)
+        {
+            if (Municipal.MyCoverage(s.Id) <= 0) return Deals.Offers.Any(o => o.IsMunicipal && o.Settlement == s.Id) ? "Offer in the Deals window" : "Not served";
+            SettlementState st = Municipal.State(s.Id);
+            if (st.SuitFiled) return "Lawsuit filed";
+            if (st.NoticeSent) return "Breach notice";
+            if (st.LowMonths90 > 0) return "Under 90% for " + st.LowMonths90 + " month(s)";
+            return "OK";
+        }
+
+        private static void ConsolidateTown(Settlement s)
+        {
+            bool ok = Municipal.Consolidate(s.Id, out string message);
+            WindowManager.SpawnDialog(message, false, ok ? DialogWindow.DialogType.Information : DialogWindow.DialogType.Warning);
+            Refresh();
+        }
+
+        private static void RefreshTowns()
+        {
+            double year = GameClock.Year;
+            double covered = Municipal.Settlements.Sum(s => Municipal.MyCoverage(s.Id));
+            double pay = Municipal.Settlements.Sum(s => Municipal.CoveragePayment(Municipal.MyCoverage(s.Id)));
+            var sb = new StringBuilder();
+            sb.Append("<b>Residents you cover:</b> ").Append(Num(covered))
+              .Append("   <b>Coverage pay at full service:</b> ").Append(Money(pay)).Append(" a month")
+              .Append("   <b>Internet users:</b> ").Append((Municipal.Adoption(year) * 100).ToString("0.0", CultureInfo.InvariantCulture)).Append("% of residents")
+              .Append("   <b>Use per user:</b> ").Append(Municipal.UsageMBPerUser(year) >= 1000 ? (Municipal.UsageMBPerUser(year) / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageMBPerUser(year).ToString("0.#", CultureInfo.InvariantCulture) + " MB").Append(" a month\n");
+            sb.Append("<i>Town offers come through the Deals window: a small first deal, then bigger ones at 3, 6, 9 and 12 months if your service there stays above 90%. ")
+              .Append("Coverage pay is only paid for the traffic you actually deliver. Under 90% for 3 months brings a breach notice; under 75% for 5 months, or a month with no service, a lawsuit. ")
+              .Append("Consolidate merges your deals in a town into one.</i>");
+            _townSummary.text = sb.ToString();
+            if (_towns.Items.Count != Municipal.Settlements.Length)
+            {
+                _towns.Items.Clear();
+                _towns.Items.AddRange(Municipal.Settlements.Cast<object>());
+            }
         }
 
         private static void OpenDeals()
@@ -226,7 +308,8 @@ namespace ISPBusiness
         private static void Refresh()
         {
             if (_window == null) return;
-            RefreshNetwork();
+            if (_townsTab) RefreshTowns();
+            else RefreshNetwork();
         }
 
         private static void RefreshNetwork()

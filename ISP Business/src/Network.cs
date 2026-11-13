@@ -388,6 +388,12 @@ namespace ISPBusiness
 
         public static string Describe(double mbps)
         {
+            if (mbps > 0 && mbps < 1)
+            {
+                double kbps = mbps * 1000.0;
+                if (kbps < 0.01) return "< 0.01 kbps";
+                return kbps.ToString(kbps < 10 ? "0.##" : "0", CultureInfo.InvariantCulture) + " kbps";
+            }
             return ((float)mbps).Bandwidth();
         }
     }

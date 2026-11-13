@@ -35,7 +35,7 @@ namespace ISPBusiness
 {
     public sealed class IspDeal
     {
-        public const byte KindProduct = 0, KindCompany = 1;
+        public const byte KindProduct = 0, KindCompany = 1, KindMunicipal = 2;
 
         public int Id;
         public byte Kind;              // KindProduct or KindCompany
@@ -56,11 +56,23 @@ namespace ISPBusiness
         public double DevMbps;         // company deals: development part of EstimatedMbps
         public int ShowAt;             // stamp when the offer appears in the Deals window (receptionist time)
         public double Unpaid;          // earned but not yet paid by the customer
+        public int Settlement;         // municipal deals: settlement id
+        public double Residents;       // municipal deals: residents covered
 
         public bool Active { get { return AcceptedAt != 0; } }
         public bool IsCompany { get { return Kind == KindCompany; } }
+        public bool IsMunicipal { get { return Kind == KindMunicipal; } }
+        public bool IsProduct { get { return Kind == KindProduct; } }
         public string Key { get { return "deal:" + Id; } }
-        public string Label { get { return IsCompany ? CompanyName + " (company-wide)" : ProductName + " (" + CompanyName + ")"; } }
+        public string Label
+        {
+            get
+            {
+                if (IsCompany) return CompanyName + " (company-wide)";
+                if (IsMunicipal) return ProductName + ": " + Residents.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " residents";
+                return ProductName + " (" + CompanyName + ")";
+            }
+        }
 
         /// <summary>Performance change this month would give at the current fulfilment (vanilla Performance column).</summary>
         public double PerfTrend
@@ -76,6 +88,7 @@ namespace ISPBusiness
     public static class Deals
     {
         public const string Bill = "ISP";
+        public const string BillMunicipal = "ISP municipal";
 
         public static readonly List<IspDeal> Offers = new List<IspDeal>();
         public static readonly List<IspDeal> Active = new List<IspDeal>();
@@ -216,6 +229,7 @@ namespace ISPBusiness
         public static Company ClientOf(IspDeal d)
         {
             if (d.IsCompany) return CompanyById(d.CompanyId);
+            if (d.IsMunicipal) return Lawsuits.CityClient();
             SoftwareProduct p = Product(d.ProductId);
             return p != null ? p.DevCompany : null;
         }
@@ -231,6 +245,7 @@ namespace ISPBusiness
         {
             if (!Offers.Contains(d)) return false;
             if (d.IsCompany) return !OtherCompanyClaims.ContainsKey(d.CompanyId) && IsAiCompany(CompanyById(d.CompanyId));
+            if (d.IsMunicipal) return Municipal.Available(d.Settlement) >= Math.Max(1, d.Residents * 0.5);
             SoftwareProduct p = Product(d.ProductId);
             if (p == null || OtherClaims.ContainsKey(d.ProductId)) return false;
             return p.DevCompany == null || !CompanyCovered(p.DevCompany.ID);
@@ -254,6 +269,7 @@ namespace ISPBusiness
                     demand = CompanyDemand(CompanyById(d.CompanyId), out double dev);
                     d.DevMbps = dev;
                 }
+                else if (d.IsMunicipal) demand = Municipal.DemandMbps(d.Residents, GameClock.Year);
                 else demand = DemandOf(Product(d.ProductId));
                 d.EstimatedMbps = demand;
                 if (!IspNetwork.Processes.TryGetValue(d.Key, out IspProcess proc))
@@ -268,6 +284,7 @@ namespace ISPBusiness
 
         private static string EndReason(IspDeal d)
         {
+            if (d.IsMunicipal) return null;
             if (d.IsCompany)
             {
                 Company c = CompanyById(d.CompanyId);
@@ -296,7 +313,8 @@ namespace ISPBusiness
                 double demand = proc != null ? proc.Demand : 0;
                 double delivered = proc != null ? proc.Delivered : 0;
 
-                double revenue = delivered * d.Rate / hoursPerMonth;
+                double revenue = d.IsMunicipal ? Municipal.HourlyRevenue(d, demand, delivered, hoursPerMonth)
+                                               : delivered * d.Rate / hoursPerMonth;
                 d.Unpaid += revenue;
                 d.TotalRevenue += revenue;
                 IspNetwork.MonthRevenue += revenue;
@@ -305,7 +323,8 @@ namespace ISPBusiness
                 d.MonthDelivered += delivered;
 
                 // Not in the vanilla Deals window (deals off, or no customer): pay it directly.
-                if (d.Unpaid >= 1.0 && !VanillaDeals.IsShown(d)) PayDirect(d);
+                // Municipal deals have no paying company, so the mod always pays them directly.
+                if (d.Unpaid >= 1.0 && (d.IsMunicipal || !VanillaDeals.IsShown(d))) PayDirect(d);
 
                 string reason = InLoadGrace ? null : EndReason(d);
                 if (reason != null) { ended.Add(new KeyValuePair<IspDeal, string>(d, reason)); continue; }
@@ -334,8 +353,11 @@ namespace ISPBusiness
                 if (!first)
                 {
                     MonthlyReview();
+                    Municipal.MonthlyBreaches();
                     MonthlyOffers();
                     MonthlyCompanyOffers();
+                    if (OffersAllowed())
+                        Municipal.MonthlyOffers(gs.MyCompany.BusinessStars, now, RecentlyDeclined, DealWindow.FindReceptionTime, () => _nextId++);
                 }
                 ExpireOffers();
             }
@@ -345,14 +367,14 @@ namespace ISPBusiness
         private static void PayDirect(IspDeal d)
         {
             if (d.Unpaid <= 0) return;
-            GameSettings.Instance.MyCompany.MakeTransaction((float)d.Unpaid, Company.TransactionCategory.Deals, true, Bill);
+            GameSettings.Instance.MyCompany.MakeTransaction((float)d.Unpaid, Company.TransactionCategory.Deals, true, d.IsMunicipal ? BillMunicipal : Bill);
             d.Unpaid = 0;
         }
 
         /// <summary>vanilla Payout(): hands over what the deal earned since the last daily payment.</summary>
         public static float TakeUnpaid(IspDeal d)
         {
-            if (!Active.Contains(d) || d.Unpaid <= 0) return 0f;
+            if (d.IsMunicipal || !Active.Contains(d) || d.Unpaid <= 0) return 0f;
             float amount = (float)d.Unpaid;
             d.Unpaid = 0;
             return amount;
@@ -376,7 +398,8 @@ namespace ISPBusiness
                     d.LastFulfilment = f;
                     d.Performance += Config.PerformanceChange(f);
                     double hours = Math.Max(1.0, GameClock.HoursPerMonth);
-                    double weight = Math.Min(1.0, Math.Sqrt(d.MonthDemand / hours / Config.RepReferenceMbps));
+                    double weight = d.IsMunicipal ? Math.Min(1.0, Math.Sqrt(d.Residents / Config.MuniRepReferenceResidents))
+                                                  : Math.Min(1.0, Math.Sqrt(d.MonthDemand / hours / Config.RepReferenceMbps));
                     if (f >= 0.98) me.ChangeBusinessRep((float)(Config.RepGoodMonth * weight), "ISP");
                     else if (f < 0.90) me.ChangeBusinessRep((float)(Config.RepBadMonth * weight), "ISP");
                 }
@@ -404,8 +427,8 @@ namespace ISPBusiness
             RefreshProducts(true);
             int now = GameClock.Stamp;
 
-            var taken = new HashSet<uint>(Active.Where(x => !x.IsCompany).Select(x => x.ProductId)
-                                          .Concat(Offers.Where(x => !x.IsCompany).Select(x => x.ProductId)));
+            var taken = new HashSet<uint>(Active.Where(x => x.IsProduct).Select(x => x.ProductId)
+                                          .Concat(Offers.Where(x => x.IsProduct).Select(x => x.ProductId)));
             int stars = gs.MyCompany.BusinessStars;
             var candidates = new List<KeyValuePair<SoftwareProduct, double>>();
             foreach (SoftwareProduct p in _products.Values)
@@ -502,6 +525,7 @@ namespace ISPBusiness
             foreach (IspDeal o in Offers)
             {
                 if (o.IsCompany) { o.EstimatedMbps = CompanyDemand(CompanyById(o.CompanyId), out double dev); o.DevMbps = dev; }
+                else if (o.IsMunicipal) o.EstimatedMbps = Municipal.DemandMbps(o.Residents, GameClock.Year);
                 else o.EstimatedMbps = DemandOf(Product(o.ProductId));
             }
         }
@@ -513,14 +537,15 @@ namespace ISPBusiness
         {
             if (!Offers.Remove(offer)) return;
             offer.AcceptedAt = Math.Max(1, GameClock.Stamp);
+            if (offer.IsMunicipal) offer.Residents = Math.Max(1, Math.Min(offer.Residents, Municipal.Available(offer.Settlement)));
             Active.Add(offer);
 
             if (offer.IsCompany)
             {
                 // Fold my product deals and offers for this company into the company-wide deal.
-                foreach (IspDeal d in Active.Where(x => !x.IsCompany && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId)).ToList())
+                foreach (IspDeal d in Active.Where(x => x.IsProduct && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId)).ToList())
                     End(d, null, false);
-                Offers.RemoveAll(x => !x.IsCompany && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId));
+                Offers.RemoveAll(x => x.IsProduct && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId));
                 IspNetwork.PendingNotices.Add("Your company-wide ISP deal with " + offer.CompanyName + " now covers all its products and development. " +
                                               "Your product ISP deals with them were folded into it, without penalty.");
             }
@@ -531,6 +556,7 @@ namespace ISPBusiness
             IspNetwork.Recalculate();
             IspNetwork.ApplyPower();
             if (offer.IsCompany) Net.BroadcastCompanyClaim(offer.CompanyId, true);
+            else if (offer.IsMunicipal) Municipal.OnAccepted(offer);
             else Net.BroadcastClaim(offer.ProductId, true);
             if (pool == null)
                 IspNetwork.PendingNotices.Add("You accepted the ISP deal for " + offer.ProductName + ", but you have no ISP pool, so it isn't served yet. " +
@@ -554,13 +580,14 @@ namespace ISPBusiness
         public static void Decline(IspDeal offer)
         {
             if (!Offers.Remove(offer)) return;
-            Declined[offer.IsCompany ? "c:" + offer.CompanyId : "p:" + offer.ProductId] = GameClock.Stamp;
+            Declined[offer.IsCompany ? "c:" + offer.CompanyId : offer.IsMunicipal ? "m:" + offer.Settlement : "p:" + offer.ProductId] = GameClock.Stamp;
         }
 
         /// <summary>Reputation change (business stars) when the player cancels an active deal, scaled by size.</summary>
         public static float CancelPenalty(IspDeal d)
         {
-            double weight = Math.Min(1.0, Math.Sqrt(Math.Max(0, d.EstimatedMbps) / Config.RepReferenceMbps));
+            double weight = d.IsMunicipal ? Math.Min(1.0, Math.Sqrt(d.Residents / Config.MuniRepReferenceResidents))
+                                          : Math.Min(1.0, Math.Sqrt(Math.Max(0, d.EstimatedMbps) / Config.RepReferenceMbps));
             return (float)(Config.RepCancel * Math.Max(0.1, weight));
         }
 
@@ -576,8 +603,16 @@ namespace ISPBusiness
                 GameSettings.Instance.MyCompany.ChangeBusinessRep((float)(Config.RepBadMonth * Math.Max(0.1, weight)), "ISP");
             }
             if (d.IsCompany) Net.BroadcastCompanyClaim(d.CompanyId, false);
+            else if (d.IsMunicipal) Municipal.OnEnded(d);
             else Net.BroadcastClaim(d.ProductId, false);
             if (notice != null) IspNetwork.PendingNotices.Add(notice);
+        }
+
+        /// <summary>Removes a deal merged into another one (consolidation): no penalty, no payment lost.</summary>
+        public static void Retire(IspDeal d)
+        {
+            if (!Active.Remove(d)) return;
+            IspNetwork.RemoveProcess(d.Key);
         }
 
         // ---------- multiplayer claims (one side decides: the player who accepted)
@@ -590,8 +625,8 @@ namespace ISPBusiness
                 return;
             }
             OtherClaims[productId] = player;
-            Offers.RemoveAll(o => !o.IsCompany && o.ProductId == productId);
-            IspDeal mine = Active.FirstOrDefault(x => !x.IsCompany && x.ProductId == productId);
+            Offers.RemoveAll(o => o.IsProduct && o.ProductId == productId);
+            IspDeal mine = Active.FirstOrDefault(x => x.IsProduct && x.ProductId == productId);
             if (mine != null) ResolveTie(player, mine, () => OtherClaims.Remove(productId), () => Net.BroadcastClaim(productId, true));
         }
 
@@ -630,9 +665,10 @@ namespace ISPBusiness
         {
             foreach (uint k in OtherClaims.Where(kv => kv.Value == player).Select(kv => kv.Key).ToList()) OtherClaims.Remove(k);
             foreach (uint k in OtherCompanyClaims.Where(kv => kv.Value == player).Select(kv => kv.Key).ToList()) OtherCompanyClaims.Remove(k);
+            Municipal.OnPlayerLeft(player);
         }
 
-        public static IEnumerable<uint> MyClaims() { return Active.Where(x => !x.IsCompany).Select(x => x.ProductId); }
+        public static IEnumerable<uint> MyClaims() { return Active.Where(x => x.IsProduct).Select(x => x.ProductId); }
         public static IEnumerable<uint> MyCompanyClaims() { return Active.Where(x => x.IsCompany).Select(x => x.CompanyId); }
 
         // ---------- save data
@@ -645,7 +681,7 @@ namespace ISPBusiness
                 Pack.L(d.OfferedAt), Pack.L(d.AcceptedAt), Pack.D(d.Performance), Pack.D(d.MonthDemand),
                 Pack.D(d.MonthDelivered), Pack.L(d.LowSince), Pack.D(d.TotalRevenue), Pack.D(d.EstimatedMbps),
                 Pack.D(d.LastFulfilment), Pack.L(d.ShowAt), Pack.L(d.Kind), Pack.L(d.CompanyId), Pack.D(d.Unpaid),
-                Pack.D(d.DevMbps),
+                Pack.D(d.DevMbps), Pack.L(d.Settlement), Pack.D(d.Residents),
             })));
         }
 
@@ -671,6 +707,8 @@ namespace ISPBusiness
                     CompanyId = f.Length > 16 ? (uint)Pack.L(f[16]) : 0u,
                     Unpaid = f.Length > 17 ? Pack.D(f[17]) : 0,
                     DevMbps = f.Length > 18 ? Pack.D(f[18]) : 0,
+                    Settlement = f.Length > 19 ? (int)Pack.L(f[19]) : 0,
+                    Residents = f.Length > 20 ? Pack.D(f[20]) : 0,
                 };
                 if (d.Id >= _nextId) _nextId = d.Id + 1;
                 (d.Active ? Active : Offers).Add(d);
@@ -679,7 +717,7 @@ namespace ISPBusiness
             {
                 string[] f = rec.Split(Pack.Field);
                 if (f.Length != 2) continue;
-                string key = f[0].StartsWith("c:", StringComparison.Ordinal) || f[0].StartsWith("p:", StringComparison.Ordinal) ? f[0] : "p:" + f[0];
+                string key = f[0].Length > 1 && f[0][1] == ':' ? f[0] : "p:" + f[0];
                 Declined[key] = (int)Pack.L(f[1]);
             }
         }

@@ -1,6 +1,6 @@
 # ISP Business
 
-A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This version has **Milestone A (the ISP network core)**, **Milestone B (product ISP deals with AI companies)** and **Milestone C (company-wide ISP deals)**.
+A Software Inc. code mod that lets you run your own Internet Service Provider. It's built from the design spec v0.7 in milestones. This version has **Milestone A (the ISP network core)**, **Milestone B (product ISP deals with AI companies)** and **Milestone C (company-wide ISP deals)** and **Milestone D (municipal ISP)**.
 
 ## What it does
 
@@ -39,6 +39,16 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 - Traffic above your capacity, or while your pools are down, is billed by the vanilla ISP as usual.
 - There's no fake income: you only save money, and you still pay the electricity for your ISP servers.
 - Costs are the same per month whatever days-per-month setting you play with.
+
+**Municipal ISP (towns)**
+- Eight settlements (3 rural, 3 towns, 2 cities) with their own population, separate from the game's: rural 2,500, town 10,000 and city 50,000 people in 1980, growing to 40 million by 2080, 2065 and 2050. Nothing vanilla is changed.
+- Town offers arrive in the Deals window: a small first deal (100 / 200 / 300 residents), then expansions at 3, 6, 9 and 12 months (up to 2x, 4x, 8x, then the whole available population), and growth offers every 6 to 12 months after that. Expansions need 90%+ service there last month.
+- Bandwidth: residents x internet adoption (5% in 1980, 70% in 2020, 100% in 2080) x data per user per month (1 MB in 1980 up to 740 GB in 2080) x 8 / 2,592,000 seconds. It's tiny in the 1980s, so towns also pay a coverage payment.
+- Pay: delivered Mbps x $5.06 x the star multiplier, plus a coverage payment per town of $1,000 + $25 x the square root of the residents you cover there, a month. It's worked out once on all your coverage in that town, so many small deals don't stack, and it's only paid for the share of traffic you actually deliver. Paid under Deals as "ISP municipal".
+- Breaches: under 90% service for 3 months in a row brings a breach notice and a reputation hit. Under 75% for 5 months, or a whole month with no service, and the town sues you through the vanilla lawsuit system (court or settle). One lawsuit per continuing breach.
+- The **Towns** tab of the ISP window shows each settlement's population, your coverage, other players' coverage, what's still available, your bandwidth, coverage pay, last month's service and breach status, with a **Consolidate** button to merge your deals in a town.
+- In the Deals window the Company column of a town deal shows the game's "Public Domain" company (towns aren't companies); the description names the town.
+- Multiplayer: players share each town's population. Each player tells the others how many residents they cover.
 
 **Company-wide ISP deals (from 1990)**
 - Each month, up to 4 AI companies needing at least 1000 Mbps in total offer a company-wide deal, separate from the 10 product offers.

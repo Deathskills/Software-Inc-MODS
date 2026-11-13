@@ -51,7 +51,9 @@ namespace ISPBusiness
 
         public override string Description()
         {
-            return Data.IsCompany ? "Company-wide ISP for " + Data.CompanyName : "ISP service for " + Data.ProductName;
+            if (Data.IsCompany) return "Company-wide ISP for " + Data.CompanyName;
+            if (Data.IsMunicipal) return "Municipal ISP for " + Data.CompanyName + ", " + Data.Residents.ToString("N0", CultureInfo.InvariantCulture) + " residents";
+            return "ISP service for " + Data.ProductName;
         }
 
         public override string Title() { return "ISP"; }
@@ -209,7 +211,22 @@ namespace ISPBusiness
         public static void Describe(IspVanillaDeal v, List<string> vars, List<string> values)
         {
             IspDeal d = v.Data;
-            if (d.IsCompany)
+            if (d.IsMunicipal)
+            {
+                Settlement s = Municipal.Get(d.Settlement);
+                double year = GameClock.Year;
+                double mine = Municipal.MyCoverage(d.Settlement);
+                double after = d.Active ? mine : mine + d.Residents;
+                Add(vars, values, "Type".Loc(), "Municipal ISP coverage");
+                Add(vars, values, "Settlement", d.CompanyName);
+                Add(vars, values, "Residents covered by this deal", d.Residents.ToString("N0", CultureInfo.InvariantCulture));
+                if (s != null) Add(vars, values, "Settlement population", Municipal.Population(s.Type, year).ToString("N0", CultureInfo.InvariantCulture));
+                Add(vars, values, "Still available", Municipal.Available(d.Settlement).ToString("N0", CultureInfo.InvariantCulture));
+                Add(vars, values, "Internet users", (Municipal.Adoption(year) * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%, " +
+                                  (Municipal.UsageMBPerUser(year) >= 1000 ? (Municipal.UsageMBPerUser(year) / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageMBPerUser(year).ToString("0", CultureInfo.InvariantCulture) + " MB") + " a month each");
+                Add(vars, values, "Coverage payment (all your deals here)", ((float)Municipal.CoveragePayment(after)).Currency() + " a month at full service");
+            }
+            else if (d.IsCompany)
             {
                 Add(vars, values, "Type".Loc(), "Company-wide ISP service");
                 Add(vars, values, "Covers", "All products of " + d.CompanyName + ", now and later, and its development");
@@ -223,7 +240,7 @@ namespace ISPBusiness
             Add(vars, values, "Price per Mbps per month", ((float)d.Rate).Currency());
             Add(vars, values, "Bandwidth needed now", IspNetwork.Describe(d.EstimatedMbps));
             if (d.IsCompany) Add(vars, values, "Of which development", IspNetwork.Describe(d.DevMbps));
-            Add(vars, values, "Income per month now", ((float)(d.Rate * d.EstimatedMbps)).Currency());
+            Add(vars, values, d.IsMunicipal ? "Bandwidth income per month now" : "Income per month now", ((float)(d.Rate * d.EstimatedMbps)).Currency());
             if (!d.Active)
             {
                 double left = Config.OfferLifetimeMonths - GameClock.MonthsBetween(d.OfferedAt, GameClock.Stamp);

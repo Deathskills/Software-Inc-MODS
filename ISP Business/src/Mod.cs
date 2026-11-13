@@ -49,7 +49,7 @@ namespace ISPBusiness
         private Sprite _icon;
         private bool _iconTried;
 
-        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined;
+        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined, _pendingMuni;
         private int _pendingNextId;
         private bool _hasPending;
 
@@ -105,6 +105,7 @@ namespace ISPBusiness
             data["ISP_Deals"] = Deals.PackDeals();
             data["ISP_Declined"] = Deals.PackDeclined();
             data["ISP_NextId"] = Deals.NextId;
+            data["ISP_Muni"] = Municipal.PackStates();
         }
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
@@ -120,6 +121,7 @@ namespace ISPBusiness
             _pendingDeals = data.Get<string>("ISP_Deals", null);
             _pendingDeclined = data.Get<string>("ISP_Declined", null);
             _pendingNextId = data.Get("ISP_NextId", 1);
+            _pendingMuni = data.Get<string>("ISP_Muni", null);
             _hasPending = true;
             if (_seenGame != null && _seenGame == GameSettings.Instance) ApplyPending();
         }
@@ -133,8 +135,9 @@ namespace ISPBusiness
             if (_pendingAssign == null && IspNetwork.Pools.Count > 0)
                 IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool()); // save from milestone A
             Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
+            Municipal.UnpackStates(_pendingMuni);
             Deals.MarkLoaded();
-            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = null;
+            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = _pendingMuni = null;
         }
 
         // ---------- main loop
@@ -154,6 +157,7 @@ namespace ISPBusiness
                     _seenGame = GameSettings.Instance;
                     IspNetwork.Reset();
                     Deals.Reset();
+                    Municipal.Reset();
                     VanillaDeals.Reset();
                     Net.ResetSession();
                     IspWindow.Forget();

@@ -21,6 +21,7 @@ namespace ISPBusiness
         public const byte MsgHello = 1;
         public const byte MsgClaim = 2;   // product id + 1 = claim / 0 = release, decided by the sender
         public const byte MsgCompanyClaim = 3;   // company id + 1 = claim / 0 = release (company-wide deal)
+        public const byte MsgCoverage = 4;       // settlement id + residents the sender covers there (municipal)
 
         public static ModController.DLLMod Mod;
         public static bool Registered;
@@ -157,6 +158,12 @@ namespace ISPBusiness
                     bool cclaim = pos < m.Data.Length && m.Data[pos++] == 1;
                     Deals.OnRemoteCompanyClaim(m.From, company, cclaim);
                     break;
+                case MsgCoverage:
+                    if (!PeerCompatible(m.From)) break;
+                    int settlement = ReadInt(m.Data, ref pos);
+                    double residents = ReadDouble(m.Data, ref pos);
+                    Municipal.OnRemoteCoverage(m.From, settlement, residents);
+                    break;
             }
         }
 
@@ -178,8 +185,26 @@ namespace ISPBusiness
             catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
         }
 
+        /// <summary>Tells every other player how many residents we cover in a settlement.</summary>
+        public static void BroadcastCoverage(int settlement, double residents)
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (!Registered || gs == null || !gs.IsNetworkMode) return;
+            try { Mod.SendNetworkMessage(CoverageBytes(settlement, residents), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
+        }
+
+        private static byte[] CoverageBytes(int settlement, double residents)
+        {
+            var b = new List<byte> { MsgCoverage };
+            WriteInt(b, settlement);
+            WriteDouble(b, residents);
+            return b.ToArray();
+        }
+
         private static void SendClaimsTo(byte target)
         {
+            foreach (var kv in Municipal.MyCoverages().ToList()) Send(CoverageBytes(kv.Key, kv.Value), target);
             foreach (uint id in Deals.MyClaims().ToList()) Send(ClaimBytes(MsgClaim, id, true), target);
             foreach (uint id in Deals.MyCompanyClaims().ToList()) Send(ClaimBytes(MsgCompanyClaim, id, true), target);
         }

@@ -9,8 +9,8 @@ namespace ISPBusiness
         public const int SaveVersion = 1;
 
         /// <summary>Network protocol version. Players must match to share ISP agreements.</summary>
-        public const int ProtocolVersion = 2;
-        public const string ModVersion = "0.4.1";
+        public const int ProtocolVersion = 3;
+        public const string ModVersion = "0.5.0";
 
         /// <summary>Network id registered with the game for this mod's messages (first come, first served).</summary>
         public const byte NetworkId = 0xA7;
@@ -67,6 +67,20 @@ namespace ISPBusiness
         public const double CompanyDealsFromYear = 1990.0;
         public const double MinCompanyMbps = 1000.0;           // a company needs at least this much to offer one
         public const int CompanyOffersPerMonth = 4;            // separate from the 10 product offers
+
+        // ---- Municipal ISP (spec 5.3, 8, 9, 12, 14)
+        public const double MunicipalReferencePrice = 5.06;    // $ per Mbps per month before the star multiplier
+        public static readonly double[] MuniInitialPopulation = { 2500, 10000, 50000 };   // rural, town, city in 1980
+        public static readonly double[] MuniTargetYear = { 2080, 2065, 2050 };            // year each reaches the cap
+        public const double MuniPopulationCap = 40000000;
+        public static readonly double[] MuniInitialCoverage = { 100, 200, 300 };          // first deal size
+        public const int MuniStartOffersPerMonth = 2;          // first-deal offers per month (expansions are extra)
+        public const double MuniCoverageBase = 1000;           // coverage payment per settlement per month: base +
+        public const double MuniCoveragePerSqrt = 25;          //   this x sqrt(residents you cover there)
+        public const double MuniRepReferenceResidents = 100000; // reputation weight reaches 1 at this many residents
+        public const double MuniBreachRep = -0.1;              // business stars lost on a breach notice
+        public const double MuniSuitPerResident = 2.0;         // lawsuit claim: $ per covered resident...
+        public const double MuniSuitMin = 20000, MuniSuitMax = 2000000; // ...within these bounds
 
         /// <summary>Vanilla business-star buckets: stars 0..6 roll a multiplier in [1.05 + s*w, 1.05 + (s+1)*w].</summary>
         public static double StarMultiplier(int stars, double roll01)
