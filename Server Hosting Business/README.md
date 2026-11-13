@@ -34,7 +34,7 @@ Mbps per 100k active users at selected years:
 
 **Hosting pay**
 - Price per Mbps per month = ISP cost (as vanilla) + power + profit.
-- Power is what your own servers really cost to run per Mbps: their total wattage divided by their total bandwidth, billed at your map's electricity price, the same way the game bills it. Before you own any server, it uses vanilla's cheapest-server value.
+- Power is a fixed $7.00 per Mbps per month. Efficient servers (Tower, Rack, Big Rack: about $1.73 of real power per Mbps at default utility costs) keep the difference as extra profit; Small servers (about $6.91) roughly break even on power.
 - Profit per Mbps per month: Multiplayer $2.00, MMO $6.00, OS / Antivirus / Office $8.55.
 - Business stars scale the profit from 80% (0 stars) to 120% (5 stars).
 - A deal's price per Mbps is locked when the offer is made, like vanilla. Its bandwidth (and so its total pay) still grows with the curves.
