@@ -10,7 +10,7 @@ namespace ISPBusiness
 
         /// <summary>Network protocol version. Players must match to share ISP agreements.</summary>
         public const int ProtocolVersion = 3;
-        public const string ModVersion = "0.5.1";
+        public const string ModVersion = "0.5.3";
 
         /// <summary>Network id registered with the game for this mod's messages (first come, first served).</summary>
         public const byte NetworkId = 0xA7;

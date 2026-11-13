@@ -26,7 +26,7 @@ namespace ISPBusiness
         private static bool _townsTab;
         private static MainBottomButton _button;
         private static float _nextRefresh;
-        private static string _groupsKey, _procsKey;
+        private static string _groupsKey, _procsKey, _summaryKey, _townKey;
         private static readonly List<KeyValuePair<GUIListView, string[]>> _pendingColumns = new List<KeyValuePair<GUIListView, string[]>>();
 
         // ---------- bottom-bar button
@@ -55,7 +55,7 @@ namespace ISPBusiness
             _groups = _procs = _towns = null;
             _serverList = null;
             _button = null;
-            _groupsKey = _procsKey = null;
+            _groupsKey = _procsKey = _summaryKey = _townKey = null;
             _pendingColumns.Clear();
         }
 
@@ -67,7 +67,7 @@ namespace ISPBusiness
             {
                 if (IsOpen) { _window.Close(); return; }
                 if (_window == null) Build();
-                _groupsKey = _procsKey = null;
+                _groupsKey = _procsKey = _summaryKey = _townKey = null;
                 _window.Show();
                 Refresh();
             }
@@ -131,9 +131,8 @@ namespace ISPBusiness
                 GUIListView list = kv.Key;
                 if (list == null) { _pendingColumns.Remove(kv); continue; }
                 if (list.GUIColumns == null) continue; // not started yet
-                if (list.GUIColumns.Count == 0)
-                    foreach (string k in kv.Value)
-                        if (list.ColumnDefinitions.TryGetValue(k, out GUIListView.ColumnDef def)) list.AddColumn(def);
+                // Columns were set before the list's Start(), which adds them. Adding them here too
+                // duplicated every column (GUIColumns is an empty list, not null, before Start).
                 _pendingColumns.Remove(kv);
             }
         }
@@ -167,7 +166,7 @@ namespace ISPBusiness
             _townsTab = towns;
             if (_netPanel != null) _netPanel.gameObject.SetActive(!towns);
             if (_townPanel != null) _townPanel.gameObject.SetActive(towns);
-            _groupsKey = _procsKey = null;
+            _groupsKey = _procsKey = _summaryKey = _townKey = null;
             if (_window != null) Refresh();
         }
 
@@ -175,9 +174,9 @@ namespace ISPBusiness
         {
             _townSummary = MakeLabel(p);
             PlaceTop(_townSummary.gameObject, p, 8f, 0f, 8f, 66f);
-            Func<Settlement, double> pop = s => Municipal.Population(s.Type, GameClock.Year);
+            Func<Settlement, double> pop = s => Municipal.PopulationNow(s.Type);
             Func<Settlement, double> mine = s => Municipal.MyCoverage(s.Id);
-            Func<Settlement, double> demand = s => Municipal.DemandMbps(mine(s), GameClock.Year);
+            Func<Settlement, double> demand = s => Municipal.DemandNow(mine(s));
             var defs = new Dictionary<string, GUIListView.ColumnDef>
             {
                 { "IspTName", new GUIListView.ColumnDefinition<Settlement>("Settlement", (Settlement s) => s.Name, true, 150f) },
@@ -218,20 +217,22 @@ namespace ISPBusiness
 
         private static void RefreshTowns()
         {
-            double year = GameClock.Year;
+            string townKey = IspNetwork.StatsVersion + "|" + Deals.Active.Count(d => d.IsMunicipal) + "|" + Deals.Active.Where(d => d.IsMunicipal).Sum(d => d.Residents);
+            bool rebuild = townKey != _townKey;
+            _townKey = townKey;
             double covered = Municipal.Settlements.Sum(s => Municipal.MyCoverage(s.Id));
             double pay = Municipal.Settlements.Sum(s => Municipal.CoveragePayment(Municipal.MyCoverage(s.Id)));
             var sb = new StringBuilder();
             sb.Append("<b>Residents you cover:</b> ").Append(Num(covered))
               .Append("   <b>Coverage pay at full service:</b> ").Append(Money(pay)).Append(" a month")
-              .Append("   <b>Internet users:</b> ").Append((Municipal.Adoption(year) * 100).ToString("0.0", CultureInfo.InvariantCulture)).Append("% of residents")
-              .Append("   <b>Use per user:</b> ").Append(Municipal.UsageMBPerUser(year) >= 1000 ? (Municipal.UsageMBPerUser(year) / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageMBPerUser(year).ToString("0.#", CultureInfo.InvariantCulture) + " MB").Append(" a month\n");
+              .Append("   <b>Internet users:</b> ").Append((Municipal.AdoptionNow * 100).ToString("0.0", CultureInfo.InvariantCulture)).Append("% of residents")
+              .Append("   <b>Use per user:</b> ").Append(Municipal.UsageNow >= 1000 ? (Municipal.UsageNow / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageNow.ToString("0.#", CultureInfo.InvariantCulture) + " MB").Append(" a month\n");
             Settlement home = Municipal.Settlements.FirstOrDefault(Municipal.OnMap);
             if (home != null) sb.Append("<b>Your map:</b> ").Append(home.TypeName).Append(", so offers come from ").Append(home.Name).Append('\n');
             sb.Append("<i>Town offers come through the Deals window: a small first deal, then bigger ones at 3, 6, 9 and 12 months if your service there stays above 90%. ")
               .Append("Coverage pay is only paid for the traffic you actually deliver. Under 90% for 3 months brings a breach notice; under 75% for 5 months, or a month with no service, a lawsuit. ")
               .Append("Consolidate merges your deals in a town into one.</i>");
-            _townSummary.text = sb.ToString();
+            if (rebuild) _townSummary.text = sb.ToString();
             List<Settlement> shown = Municipal.Shown().ToList();
             if (_towns.Items.Count != shown.Count || shown.Any(s => !_towns.Items.Contains(s)))
             {
@@ -317,24 +318,26 @@ namespace ISPBusiness
 
         private static void RefreshNetwork()
         {
-            double installed = 0, capacity = 0, assigned = 0;
-            foreach (PoolState st in IspNetwork.State.Values) { installed += st.Installed; capacity += st.Capacity; assigned += st.Assigned; }
-            IspProcess own = IspNetwork.Own();
-            var sb = new StringBuilder();
-            sb.Append("<b>ISP pools:</b> ").Append(IspNetwork.Pools.Count)
-              .Append("   <b>Capacity:</b> ").Append(IspNetwork.Describe(capacity)).Append(" of ").Append(IspNetwork.Describe(installed))
-              .Append("   <b>Carrying:</b> ").Append(IspNetwork.Describe(assigned))
-              .Append("   <b>Transit:</b> ").Append(Money(Config.TransitRate(GameClock.Year))).Append(" per Mbps per month\n");
-            sb.Append("<b>Your company's internet:</b> ").Append(IspNetwork.Describe(own.Demand)).Append(", ")
-              .Append(IspNetwork.Describe(own.Delivered)).Append(" through your ISP")
-              .Append("   <b>Saved this month:</b> ").Append(Money(IspNetwork.MonthSavings))
-              .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthSavings)).Append('\n');
-            sb.Append("<b>ISP deals:</b> ").Append(Deals.Active.Count)
-              .Append("   <b>Income this month:</b> ").Append(Money(IspNetwork.MonthRevenue))
-              .Append("   <b>Last month:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
-              .Append("   <b>Transit this month:</b> ").Append(Money(IspNetwork.MonthTransit)).Append('\n');
-            sb.Append("<i>Only ISP pools are listed. Add one with \"Add server group\" or the ISP mode button in the Servers window. If one server breaks, the pool is down and its ISP processes follow its fallback.</i>");
-            _summary.text = sb.ToString();
+            // Summary: last month's results only, rebuilt when the month ticks or pools change (not live).
+            double installed = IspNetwork.State.Values.Sum(st => st.Installed);
+            string summaryKey = IspNetwork.StatsVersion + "|" + IspNetwork.Pools.Count + "|" + installed.ToString("R", CultureInfo.InvariantCulture) + "|" + Deals.Active.Count;
+            if (summaryKey != _summaryKey)
+            {
+                _summaryKey = summaryKey;
+                var sb = new StringBuilder();
+                sb.Append("<b>ISP pools:</b> ").Append(IspNetwork.Pools.Count)
+                  .Append("   <b>Installed capacity:</b> ").Append(IspNetwork.Describe(installed))
+                  .Append("   <b>ISP deals:</b> ").Append(Deals.Active.Count)
+                  .Append("   <b>Transit this month:</b> ").Append(Money(Config.TransitRate(GameClock.Year))).Append(" per Mbps\n");
+                sb.Append("<b>Last month:</b> your pools carried ").Append(IspNetwork.Describe(IspNetwork.LastMonthCarriedAvg)).Append(" on average")
+                  .Append("   <b>Your company's internet:</b> ").Append(IspNetwork.Describe(IspNetwork.LastMonthOwnAvg))
+                  .Append(", ").Append(IspNetwork.Describe(IspNetwork.LastMonthOwnServedAvg)).Append(" through your ISP\n");
+                sb.Append("<b>Last month:</b> saved ").Append(Money(IspNetwork.LastMonthSavings)).Append(" on your own internet")
+                  .Append("   <b>ISP deal income:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
+                  .Append("   <b>Transit paid:</b> ").Append(Money(IspNetwork.LastMonthTransit)).Append('\n');
+                sb.Append("<i>Figures are last month's and update when the month ends. Only ISP pools are listed. If one server breaks, the pool is down and its ISP processes follow its fallback.</i>");
+                _summary.text = sb.ToString();
+            }
 
             List<ServerGroup> groups = OwnGroups();
             string key = string.Join("|", groups.Select(g => g.Name).ToArray());
@@ -481,7 +484,7 @@ namespace ISPBusiness
                 WindowManager.SpawnDialog(isp
                     ? "\"" + name + "\" is now an ISP pool. Manage it in the ISP Network window. Press ISP mode again to put it back to hosting."
                     : "\"" + name + "\" is back to hosting.", false, DialogWindow.DialogType.Information);
-            _groupsKey = _procsKey = null;
+            _groupsKey = _procsKey = _summaryKey = _townKey = null;
             if (_window != null) Refresh();
         }
 

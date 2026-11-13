@@ -49,7 +49,7 @@ namespace ISPBusiness
         private Sprite _icon;
         private bool _iconTried;
 
-        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined, _pendingMuni;
+        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined, _pendingMuni, _pendingStats;
         private int _pendingNextId;
         private bool _hasPending;
 
@@ -106,6 +106,7 @@ namespace ISPBusiness
             data["ISP_Declined"] = Deals.PackDeclined();
             data["ISP_NextId"] = Deals.NextId;
             data["ISP_Muni"] = Municipal.PackStates();
+            data["ISP_Stats"] = IspNetwork.PackStats();
         }
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
@@ -122,6 +123,7 @@ namespace ISPBusiness
             _pendingDeclined = data.Get<string>("ISP_Declined", null);
             _pendingNextId = data.Get("ISP_NextId", 1);
             _pendingMuni = data.Get<string>("ISP_Muni", null);
+            _pendingStats = data.Get<string>("ISP_Stats", null);
             _hasPending = true;
             if (_seenGame != null && _seenGame == GameSettings.Instance) ApplyPending();
         }
@@ -136,8 +138,9 @@ namespace ISPBusiness
                 IspNetwork.SetAssignment(IspNetwork.OwnKey, IspNetwork.BestPool()); // save from milestone A
             Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
             Municipal.UnpackStates(_pendingMuni);
+            IspNetwork.UnpackStats(_pendingStats);
             Deals.MarkLoaded();
-            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = _pendingMuni = null;
+            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = _pendingMuni = _pendingStats = null;
         }
 
         // ---------- main loop

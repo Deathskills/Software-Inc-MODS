@@ -65,6 +65,11 @@ namespace ISPBusiness
 
         // This-month figures for the window.
         public static double MonthSavings, MonthTransit, MonthRevenue, LastMonthSavings, LastMonthTransit, LastMonthRevenue;
+        // Mbps-hours this month, for last month's averages (the window shows last month, not live figures).
+        public static double MonthOwnMbpsH, MonthOwnServedMbpsH, MonthCarriedMbpsH, MonthHours;
+        public static double LastMonthOwnAvg, LastMonthOwnServedAvg, LastMonthCarriedAvg;
+        /// <summary>Changes once a month: the window rebuilds its summary only when this changes.</summary>
+        public static int StatsVersion;
         private static int _statsMonth = int.MinValue;
 
         /// <summary>Messages to show the player on the next frame (not from inside the hourly tick).</summary>
@@ -77,6 +82,9 @@ namespace ISPBusiness
             State.Clear();
             Processes.Clear();
             MonthSavings = MonthTransit = MonthRevenue = LastMonthSavings = LastMonthTransit = LastMonthRevenue = 0;
+            MonthOwnMbpsH = MonthOwnServedMbpsH = MonthCarriedMbpsH = MonthHours = 0;
+            LastMonthOwnAvg = LastMonthOwnServedAvg = LastMonthCarriedAvg = 0;
+            StatsVersion++;
             _statsMonth = int.MinValue;
             PendingNotices.Clear();
             Own();
@@ -216,6 +224,11 @@ namespace ISPBusiness
                 MonthTransit += transit;
             }
 
+            MonthHours += 1;
+            MonthOwnMbpsH += own.Demand;
+            MonthOwnServedMbpsH += own.Delivered;
+            foreach (PoolState st in State.Values) MonthCarriedMbpsH += st.Assigned;
+
             Deals.OnHour(hoursPerMonth, transitRate);
             ApplyPower();
         }
@@ -239,9 +252,41 @@ namespace ISPBusiness
                 LastMonthSavings = MonthSavings;
                 LastMonthTransit = MonthTransit;
                 LastMonthRevenue = MonthRevenue;
+                double h = Math.Max(1.0, MonthHours);
+                LastMonthOwnAvg = MonthOwnMbpsH / h;
+                LastMonthOwnServedAvg = MonthOwnServedMbpsH / h;
+                LastMonthCarriedAvg = MonthCarriedMbpsH / h;
             }
             MonthSavings = MonthTransit = MonthRevenue = 0;
+            MonthOwnMbpsH = MonthOwnServedMbpsH = MonthCarriedMbpsH = MonthHours = 0;
             _statsMonth = month;
+            StatsVersion++;
+        }
+
+        /// <summary>Month figures for the save, so "last month" survives a reload.</summary>
+        public static string PackStats()
+        {
+            return string.Join(Pack.Field.ToString(), new[]
+            {
+                Pack.L(_statsMonth == int.MinValue ? -1 : _statsMonth), Pack.D(MonthSavings), Pack.D(MonthTransit), Pack.D(MonthRevenue),
+                Pack.D(LastMonthSavings), Pack.D(LastMonthTransit), Pack.D(LastMonthRevenue),
+                Pack.D(MonthOwnMbpsH), Pack.D(MonthOwnServedMbpsH), Pack.D(MonthCarriedMbpsH), Pack.D(MonthHours),
+                Pack.D(LastMonthOwnAvg), Pack.D(LastMonthOwnServedAvg), Pack.D(LastMonthCarriedAvg),
+            });
+        }
+
+        public static void UnpackStats(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return;
+            string[] f = s.Split(Pack.Field);
+            if (f.Length < 14) return;
+            long m = Pack.L(f[0]);
+            _statsMonth = m < 0 ? int.MinValue : (int)m;
+            MonthSavings = Pack.D(f[1]); MonthTransit = Pack.D(f[2]); MonthRevenue = Pack.D(f[3]);
+            LastMonthSavings = Pack.D(f[4]); LastMonthTransit = Pack.D(f[5]); LastMonthRevenue = Pack.D(f[6]);
+            MonthOwnMbpsH = Pack.D(f[7]); MonthOwnServedMbpsH = Pack.D(f[8]); MonthCarriedMbpsH = Pack.D(f[9]); MonthHours = Pack.D(f[10]);
+            LastMonthOwnAvg = Pack.D(f[11]); LastMonthOwnServedAvg = Pack.D(f[12]); LastMonthCarriedAvg = Pack.D(f[13]);
+            StatsVersion++;
         }
 
         /// <summary>Rebuilds every pool's capacity, routes every process (with vanilla fallback)

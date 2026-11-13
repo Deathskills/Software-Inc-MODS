@@ -31,6 +31,7 @@ namespace ISPBusiness
         public const byte TypeId = 200;
         public readonly IspDeal Data;
         internal bool Detaching;
+        internal bool Restoring;   // being put back into Active deals after a load
 
         public IspVanillaDeal(Company client, uint id, IspDeal data) : base(client, id, false)
         {
@@ -71,6 +72,7 @@ namespace ISPBusiness
 
         public override bool StillValid(bool active)
         {
+            if (Restoring) return true;
             if (Detaching) return false;
             return active ? Deals.Active.Contains(Data) : Deals.IsOpenOffer(Data);
         }
@@ -78,7 +80,7 @@ namespace ISPBusiness
         public override void Accept(Company company)
         {
             base.Accept(company);
-            if (!Detaching) Deals.AcceptFromVanilla(Data);
+            if (!Detaching && !Restoring) Deals.AcceptFromVanilla(Data);
         }
 
         public override bool Cancel()
@@ -156,11 +158,12 @@ namespace ISPBusiness
                 IspVanillaDeal v = Create(d);
                 if (v == null) continue;
                 Shown[d] = v;
-                v.Detaching = true;            // restore: don't run the mod's accept again
-                v.Accept(gs.MyCompany);
-                v.Detaching = false;
+                // Restore through vanilla's own accept, which adds it to the real Active deals list.
+                // (GetActiveDealsPerformance() returns a copy, so adding to it showed nothing.)
                 lock (w.AllDeals) { w.AllDeals[v.ID] = v; }
-                w.GetActiveDealsPerformance().Add(v);
+                v.Restoring = true;
+                try { w.ActuallyAcceptDeal(v, true); }
+                finally { v.Restoring = false; }
             }
         }
 
@@ -214,16 +217,15 @@ namespace ISPBusiness
             if (d.IsMunicipal)
             {
                 Settlement s = Municipal.Get(d.Settlement);
-                double year = GameClock.Year;
                 double mine = Municipal.MyCoverage(d.Settlement);
                 double after = d.Active ? mine : mine + d.Residents;
                 Add(vars, values, "Type".Loc(), "Municipal ISP coverage");
                 Add(vars, values, "Settlement", d.CompanyName);
                 Add(vars, values, "Residents covered by this deal", d.Residents.ToString("N0", CultureInfo.InvariantCulture));
-                if (s != null) Add(vars, values, "Settlement population", Municipal.Population(s.Type, year).ToString("N0", CultureInfo.InvariantCulture));
+                if (s != null) Add(vars, values, "Settlement population", Municipal.PopulationNow(s.Type).ToString("N0", CultureInfo.InvariantCulture));
                 Add(vars, values, "Still available", Municipal.Available(d.Settlement).ToString("N0", CultureInfo.InvariantCulture));
-                Add(vars, values, "Internet users", (Municipal.Adoption(year) * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%, " +
-                                  (Municipal.UsageMBPerUser(year) >= 1000 ? (Municipal.UsageMBPerUser(year) / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageMBPerUser(year).ToString("0", CultureInfo.InvariantCulture) + " MB") + " a month each");
+                Add(vars, values, "Internet users", (Municipal.AdoptionNow * 100).ToString("0.0", CultureInfo.InvariantCulture) + "%, " +
+                                  (Municipal.UsageNow >= 1000 ? (Municipal.UsageNow / 1000).ToString("0.0", CultureInfo.InvariantCulture) + " GB" : Municipal.UsageNow.ToString("0", CultureInfo.InvariantCulture) + " MB") + " a month each");
                 Add(vars, values, "Coverage payment (all your deals here)", ((float)Municipal.CoveragePayment(after)).Currency() + " a month at full service");
             }
             else if (d.IsCompany)

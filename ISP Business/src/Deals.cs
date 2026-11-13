@@ -269,7 +269,7 @@ namespace ISPBusiness
                     demand = CompanyDemand(CompanyById(d.CompanyId), out double dev);
                     d.DevMbps = dev;
                 }
-                else if (d.IsMunicipal) demand = Municipal.DemandMbps(d.Residents, GameClock.Year);
+                else if (d.IsMunicipal) demand = Municipal.DemandNow(d.Residents);
                 else demand = DemandOf(Product(d.ProductId));
                 d.EstimatedMbps = demand;
                 if (!IspNetwork.Processes.TryGetValue(d.Key, out IspProcess proc))
@@ -328,7 +328,9 @@ namespace ISPBusiness
 
                 string reason = InLoadGrace ? null : EndReason(d);
                 if (reason != null) { ended.Add(new KeyValuePair<IspDeal, string>(d, reason)); continue; }
-                if (demand < Config.MinOfferMbps)
+                // Town traffic is tiny by design (it's paid mostly by coverage), so the "needs under 1 Mbps"
+                // rule only ends product and company deals.
+                if (!d.IsMunicipal && demand < Config.MinOfferMbps)
                 {
                     if (d.LowSince < 0) d.LowSince = now;
                     else if (GameClock.MonthsBetween(d.LowSince, now) >= Config.DealEndMonths)
@@ -356,6 +358,7 @@ namespace ISPBusiness
                     Municipal.MonthlyBreaches();
                     MonthlyOffers();
                     MonthlyCompanyOffers();
+                    Municipal.Snapshot(); // population, adoption and use only change here
                     if (OffersAllowed())
                         Municipal.MonthlyOffers(gs.MyCompany.BusinessStars, now, RecentlyDeclined, DealWindow.FindReceptionTime, () => _nextId++);
                 }
@@ -525,7 +528,7 @@ namespace ISPBusiness
             foreach (IspDeal o in Offers)
             {
                 if (o.IsCompany) { o.EstimatedMbps = CompanyDemand(CompanyById(o.CompanyId), out double dev); o.DevMbps = dev; }
-                else if (o.IsMunicipal) o.EstimatedMbps = Municipal.DemandMbps(o.Residents, GameClock.Year);
+                else if (o.IsMunicipal) o.EstimatedMbps = Municipal.DemandNow(o.Residents);
                 else o.EstimatedMbps = DemandOf(Product(o.ProductId));
             }
         }
@@ -544,7 +547,10 @@ namespace ISPBusiness
             {
                 // Fold my product deals and offers for this company into the company-wide deal.
                 foreach (IspDeal d in Active.Where(x => x.IsProduct && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId)).ToList())
+                {
+                    Debug.Log("[ISP Business] Folding product deal " + d.Id + " into the company-wide deal with " + offer.CompanyName + ".");
                     End(d, null, false);
+                }
                 Offers.RemoveAll(x => x.IsProduct && (x.CompanyId == offer.CompanyId || ProductOwner(x) == offer.CompanyId));
                 IspNetwork.PendingNotices.Add("Your company-wide ISP deal with " + offer.CompanyName + " now covers all its products and development. " +
                                               "Your product ISP deals with them were folded into it, without penalty.");
