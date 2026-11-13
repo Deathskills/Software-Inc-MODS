@@ -1,0 +1,3 @@
+Name "ISP Business"
+Author "Deathskills + Claude"
+Description "Run your own Internet Service Provider. Switch server groups to ISP mode: Towers carry 15 Gbps, Racks 50 Gbps and Big Racks 250 Gbps, with much lower power per Mbps. Your company's own internet then runs through your ISP, so you pay wholesale transit instead of the vanilla ISP rate. Works in multiplayer. Requires 0HarmonyLoader. Milestone A: ISP deals with AI companies, cities and other players come in later versions."
