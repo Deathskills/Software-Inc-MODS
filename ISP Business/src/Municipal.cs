@@ -68,6 +68,37 @@ namespace ISPBusiness
         {
             States.Clear();
             Others.Clear();
+            _snapMonth = int.MinValue;
+        }
+
+        // ---------- monthly snapshot: population, adoption and use per user only change when the month
+        // ticks (just before offers go out), not every hour. Rebuilt on load, never saved.
+        private static int _snapMonth = int.MinValue;
+        private static readonly double[] _pop = new double[3];
+        private static double _adoption, _usageMB;
+
+        /// <summary>Takes the month's snapshot (called at the month change before offers, and lazily after a load).</summary>
+        public static void Snapshot()
+        {
+            double year = GameClock.Year;
+            for (int t = 0; t < 3; t++) _pop[t] = Math.Floor(Population(t, year));
+            _adoption = Adoption(year);
+            _usageMB = UsageMBPerUser(year);
+            _snapMonth = GameClock.MonthIndex;
+        }
+
+        private static void EnsureSnapshot() { if (_snapMonth == int.MinValue) Snapshot(); }
+
+        /// <summary>This month's population of a settlement type.</summary>
+        public static double PopulationNow(int type) { EnsureSnapshot(); return _pop[Math.Max(0, Math.Min(2, type))]; }
+        public static double AdoptionNow { get { EnsureSnapshot(); return _adoption; } }
+        public static double UsageNow { get { EnsureSnapshot(); return _usageMB; } }
+
+        /// <summary>This month's average Mbps for a number of covered residents.</summary>
+        public static double DemandNow(double residents)
+        {
+            EnsureSnapshot();
+            return residents * _adoption * _usageMB * 8.0 / 2592000.0;
         }
 
         public static Settlement Get(int id) { return Settlements.FirstOrDefault(s => s.Id == id); }
@@ -163,7 +194,7 @@ namespace ISPBusiness
         {
             Settlement s = Get(id);
             if (s == null) return 0;
-            return Math.Max(0, Math.Floor(Population(s.Type, GameClock.Year) - MyCoverage(id) - OthersCoverage(id)));
+            return Math.Max(0, Math.Floor(PopulationNow(s.Type) - MyCoverage(id) - OthersCoverage(id)));
         }
 
         // ---------- hourly (called from Deals.OnHour for each municipal deal)
@@ -281,7 +312,7 @@ namespace ISPBusiness
                     CompanyName = s.Name + " (" + s.TypeName.ToLowerInvariant() + ")",
                     Rate = Config.MunicipalReferencePrice * Config.StarMultiplier(stars, UnityEngine.Random.value),
                     OfferedAt = now,
-                    EstimatedMbps = DemandMbps(Math.Floor(size), GameClock.Year),
+                    EstimatedMbps = DemandNow(Math.Floor(size)),
                     ShowAt = when.Value.ToInt(),
                 });
             }
