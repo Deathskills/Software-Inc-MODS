@@ -4,6 +4,8 @@
 //    "Back to hosting" button. "Add server group" turns a hosting group into a pool. Below it, the ISP
 //    processes on the selected pool, with "Move selected processes" like vanilla.
 //  - The vanilla Servers window gets an "ISP mode" button column too (EnsureServerWindowColumn).
+//  - Players tab: your ISP offer to other players, their offers to you, your player customers and your
+//    own agreement (Agreements.cs). Multiplayer only.
 //  - ISP offers and deals are in the vanilla Deals window (VanillaDeals.cs); the "Deals window" button opens it.
 //    Move a deal to another pool from the process list here.
 // Vanilla columns are reused by key from GUIListView.ColumnDefinitions, so they behave like vanilla.
@@ -20,10 +22,12 @@ namespace ISPBusiness
     public static class IspWindow
     {
         private static GUIWindow _window;
-        private static RectTransform _netPanel, _townPanel;
-        private static Text _summary, _procLabel, _townSummary;
-        private static GUIListView _groups, _procs, _towns;
-        private static bool _townsTab;
+        private static RectTransform _netPanel, _townPanel, _playerPanel;
+        private static Text _summary, _procLabel, _townSummary, _playerSummary, _openText;
+        private static GUIListView _groups, _procs, _towns, _offers, _customers;
+        private const int TabPools = 0, TabTowns = 1, TabPlayers = 2;
+        private static int _tab;
+        private static string _playersKey;
         private static MainBottomButton _button;
         private static float _nextRefresh;
         private static string _groupsKey, _procsKey, _summaryKey, _townKey;
@@ -50,9 +54,10 @@ namespace ISPBusiness
         public static void Forget()
         {
             _window = null;
-            _netPanel = _townPanel = null;
-            _summary = _procLabel = _townSummary = null;
-            _groups = _procs = _towns = null;
+            _netPanel = _townPanel = _playerPanel = null;
+            _summary = _procLabel = _townSummary = _playerSummary = _openText = null;
+            _groups = _procs = _towns = _offers = _customers = null;
+            _playersKey = null;
             _serverList = null;
             _button = null;
             _groupsKey = _procsKey = _summaryKey = _townKey = null;
@@ -67,7 +72,7 @@ namespace ISPBusiness
             {
                 if (IsOpen) { _window.Close(); return; }
                 if (_window == null) Build();
-                _groupsKey = _procsKey = _summaryKey = _townKey = null;
+                _groupsKey = _procsKey = _summaryKey = _townKey = _playersKey = null;
                 _window.Show();
                 Refresh();
             }
@@ -147,10 +152,11 @@ namespace ISPBusiness
             if (rt != null) rt.sizeDelta = new Vector2(1180f, 640f);
             GameObject main = _window.MainPanel;
 
-            MakeButton("ISP pools", main, new Rect(8f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(false));
-            MakeButton("Towns", main, new Rect(142f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(true));
-            MakeButton("Add server group", main, new Rect(296f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), AddGroup);
-            MakeButton("Deals window", main, new Rect(460f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
+            MakeButton("ISP pools", main, new Rect(8f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(TabPools));
+            MakeButton("Towns", main, new Rect(142f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(TabTowns));
+            MakeButton("Players", main, new Rect(276f, 6f, 130f, 28f), new Rect(0f, 0f, 0f, 0f), () => ShowTab(TabPlayers));
+            MakeButton("Add server group", main, new Rect(430f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), AddGroup);
+            MakeButton("Deals window", main, new Rect(594f, 6f, 160f, 28f), new Rect(0f, 0f, 0f, 0f), OpenDeals);
 
             _netPanel = WindowManager.SpawnPanel();
             Place(_netPanel.gameObject, main, 0f, 50f, 0f, 0f);
@@ -158,15 +164,19 @@ namespace ISPBusiness
             _townPanel = WindowManager.SpawnPanel();
             Place(_townPanel.gameObject, main, 0f, 50f, 0f, 0f);
             BuildTowns(_townPanel.gameObject);
-            ShowTab(_townsTab);
+            _playerPanel = WindowManager.SpawnPanel();
+            Place(_playerPanel.gameObject, main, 0f, 50f, 0f, 0f);
+            BuildPlayers(_playerPanel.gameObject);
+            ShowTab(_tab);
         }
 
-        private static void ShowTab(bool towns)
+        private static void ShowTab(int tab)
         {
-            _townsTab = towns;
-            if (_netPanel != null) _netPanel.gameObject.SetActive(!towns);
-            if (_townPanel != null) _townPanel.gameObject.SetActive(towns);
-            _groupsKey = _procsKey = _summaryKey = _townKey = null;
+            _tab = tab;
+            if (_netPanel != null) _netPanel.gameObject.SetActive(tab == TabPools);
+            if (_townPanel != null) _townPanel.gameObject.SetActive(tab == TabTowns);
+            if (_playerPanel != null) _playerPanel.gameObject.SetActive(tab == TabPlayers);
+            _groupsKey = _procsKey = _summaryKey = _townKey = _playersKey = null;
             if (_window != null) Refresh();
         }
 
@@ -241,6 +251,185 @@ namespace ISPBusiness
             }
         }
 
+        // ---------- Players tab (agreements between players)
+
+        private static void BuildPlayers(GameObject p)
+        {
+            _playerSummary = MakeLabel(p);
+            PlaceTop(_playerSummary.gameObject, p, 8f, 0f, 8f, 88f);
+
+            Button open = MakeButton("Open your offer", p, new Rect(8f, 92f, 170f, 28f), new Rect(0f, 0f, 0f, 0f), ToggleOffer);
+            _openText = open.GetComponentInChildren<Text>();
+            MakeButton("Standard price", p, new Rect(182f, 92f, 150f, 28f), new Rect(0f, 0f, 0f, 0f), () => PickPrice(Agreements.Standard));
+            MakeButton("Premium price", p, new Rect(336f, 92f, 150f, 28f), new Rect(0f, 0f, 0f, 0f), () => PickPrice(Agreements.Premium));
+            MakeButton("Pool for players", p, new Rect(490f, 92f, 150f, 28f), new Rect(0f, 0f, 0f, 0f), PickOfferPool);
+            MakeButton("Leave your agreement", p, new Rect(680f, 92f, 190f, 28f), new Rect(0f, 0f, 0f, 0f), LeaveAgreement);
+
+            Text offersLabel = MakeLabel(p);
+            offersLabel.text = "<b>Offers from other players</b> (prices per Mbps a month; connect to buy your internet from them):";
+            PlaceTop(offersLabel.gameObject, p, 8f, 126f, 8f, 22f);
+            var defs = new Dictionary<string, GUIListView.ColumnDef>
+            {
+                { "IspOName", new GUIListView.ColumnDefinition<PlayerOffer>("Provider", (PlayerOffer o) => o.Name ?? "", true, 180f) },
+                { "IspOStd", new GUIListView.ColumnDefinition<PlayerOffer>("Standard", (PlayerOffer o) => (float)Agreements.Dollars(o.Standard), true, 100f) },
+                { "IspOPrem", new GUIListView.ColumnDefinition<PlayerOffer>("Premium", (PlayerOffer o) => (float)Agreements.Dollars(o.Premium), true, 100f) },
+                { "IspOVan", new GUIListView.ColumnDefinition<PlayerOffer>("Vanilla ISP", (PlayerOffer o) => (float)Server.GetISPCost(), true, 100f) },
+                { "IspOSpare", new GUIListView.ColumnDefinition<PlayerOffer>("Spare capacity", (PlayerOffer o) => (object)IspNetwork.Describe(o.Spare), (PlayerOffer o) => (float)o.Spare, true, 120f) },
+                { "IspOStatus", new GUIListView.ColumnDefinition<PlayerOffer>("Status", (PlayerOffer o) => OfferStatus(o), true, 200f) },
+                { "IspOConStd", new GUIListView.ColumnDefinition<PlayerOffer>("Connect standard", (PlayerOffer o) => ConnectTo(o, Agreements.Standard), 140f) },
+                { "IspOConPrem", new GUIListView.ColumnDefinition<PlayerOffer>("Connect premium", (PlayerOffer o) => ConnectTo(o, Agreements.Premium), 140f) },
+            };
+            _offers = MakeList(p, defs, new[] { "IspOName", "IspOStd", "IspOPrem", "IspOVan", "IspOSpare", "IspOStatus", "IspOConStd", "IspOConPrem" });
+            Place(_offers.gameObject, p, 8f, 150f, 8f, 4f, 0f, 0f, 1f, 0.55f);
+
+            Text custLabel = MakeLabel(p);
+            custLabel.text = "<b>Your player customers</b> (they are ISP processes on your pools, like deals):";
+            PlaceTop(custLabel.gameObject, p, 8f, 4f, 8f, 22f, 0.55f);
+            var cdefs = new Dictionary<string, GUIListView.ColumnDef>
+            {
+                { "IspCName", new GUIListView.ColumnDefinition<PlayerCustomer>("Customer", (PlayerCustomer c) => c.Name ?? "", true, 180f) },
+                { "IspCTier", new GUIListView.ColumnDefinition<PlayerCustomer>("Type", (PlayerCustomer c) => Agreements.TierName(c.Tier), true, 90f) },
+                { "IspCPrice", new GUIListView.ColumnDefinition<PlayerCustomer>("Price", (PlayerCustomer c) => (float)Agreements.Dollars(c.Price), true, 100f) },
+                { "IspCUse", new GUIListView.ColumnDefinition<PlayerCustomer>("Bandwidth", (PlayerCustomer c) => (object)IspNetwork.Describe(c.Usage), (PlayerCustomer c) => (float)c.Usage, true, 110f) },
+                { "IspCLast", new GUIListView.ColumnDefinition<PlayerCustomer>("Delivered last month", (PlayerCustomer c) => (float)c.LastFulfilment, true, 150f, currency: false, includeDecimal: true, progressBar: true, withTotal: false) },
+                { "IspCEarned", new GUIListView.ColumnDefinition<PlayerCustomer>("Earned last month", (PlayerCustomer c) => (float)c.LastEarned, true, 130f) },
+                { "IspCPool", new GUIListView.ColumnDefinition<PlayerCustomer>("Pool", (PlayerCustomer c) => IspNetwork.GetAssignment(c.Key) ?? "None", true, 140f) },
+                { "IspCDrop", new GUIListView.ColumnDefinition<PlayerCustomer>("Drop", (PlayerCustomer c) => DropCustomer(c), 90f) },
+            };
+            _customers = MakeList(p, cdefs, new[] { "IspCName", "IspCTier", "IspCPrice", "IspCUse", "IspCLast", "IspCEarned", "IspCPool", "IspCDrop" });
+            Place(_customers.gameObject, p, 8f, 30f, 8f, 8f, 0f, 0.55f, 1f, 1f);
+        }
+
+        private static string OfferStatus(PlayerOffer o)
+        {
+            PlayerAgreement a = Agreements.Current;
+            if (a != null && a.Provider == o.Player) return "Your ISP (" + Agreements.TierName(a.Tier).ToLowerInvariant() + ")";
+            if (Agreements.Pending && Agreements.PendingProvider == o.Player) return "Waiting for their answer";
+            if (Agreements.Customers.ContainsKey(o.Player)) return "Your customer";
+            return Net.PeerCompatible(o.Player) ? "Available" : "Different mod version";
+        }
+
+        private static void RefreshPlayers()
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (_openText != null) _openText.text = Agreements.OfferOpen ? "Close your offer" : "Open your offer";
+            string key = Agreements.Version + "|" + IspNetwork.StatsVersion + "|" + Agreements.Offers.Count + "|" + Agreements.Customers.Count + "|" +
+                         (gs != null && gs.IsNetworkMode);
+            if (key == _playersKey) return;
+            _playersKey = key;
+
+            var sb = new StringBuilder();
+            if (gs == null || !gs.IsNetworkMode)
+            {
+                sb.Append("<b>Agreements between players only work in multiplayer games.</b> In a multiplayer game, open your offer here to sell ISP service to other players, or connect to another player's offer to buy yours from them.\n");
+            }
+            sb.Append("<b>Your offer:</b> ").Append(Agreements.OfferOpen ? "open" : "closed")
+              .Append("   <b>Standard:</b> ").Append(Money(Agreements.Dollars(Agreements.StandardPrice)))
+              .Append("   <b>Premium:</b> ").Append(Money(Agreements.Dollars(Agreements.PremiumPrice)))
+              .Append(" per Mbps a month (vanilla ISP: ").Append(Money(Server.GetISPCost())).Append(")")
+              .Append("   <b>Pool:</b> ").Append(Agreements.OfferPool ?? "most spare capacity").Append('\n');
+            PlayerAgreement a = Agreements.Current;
+            if (a != null)
+            {
+                sb.Append("<b>Your ISP:</b> ").Append(a.Name).Append(", ").Append(Agreements.TierName(a.Tier).ToLowerInvariant())
+                  .Append(", ").Append(Money(Agreements.Dollars(a.Price))).Append(" per Mbps a month. ");
+                if (a.LastCost > 0 || a.LastSaved != 0)
+                    sb.Append("<b>Last month:</b> delivered ").Append((a.LastFulfilment * 100).ToString("0", CultureInfo.InvariantCulture)).Append("%, paid ")
+                      .Append(Money(a.LastCost)).Append(", saved ").Append(Money(a.LastSaved)).Append(" against the vanilla ISP. ");
+                sb.Append("Leaving now costs ").Append(Money(Agreements.LeaveFee())).Append(".\n");
+            }
+            else sb.Append("<b>Your ISP:</b> the vanilla ISP (and your own pools).\n");
+            sb.Append("<i>Your own pools carry your internet first; the rest goes to your provider. What they don't deliver stays on the vanilla bill. ")
+              .Append("Standard: leaving costs ").Append((Config.ReconnectFeeMonths).ToString("0.#", CultureInfo.InvariantCulture)).Append(" month of service (at least ").Append(Money(Config.ReconnectFeeMin)).Append("). ")
+              .Append("Premium: if a day's delivery falls under ").Append((Config.PremiumMinService * 100).ToString("0", CultureInfo.InvariantCulture))
+              .Append("%, it ends for free. If either player leaves the game, it ends for free.</i>");
+            _playerSummary.text = sb.ToString();
+
+            List<PlayerOffer> offers = Agreements.Offers.Values.OrderBy(o => o.Name, StringComparer.Ordinal).ToList();
+            _offers.Items.Clear();
+            _offers.Items.AddRange(offers.Cast<object>());
+            List<PlayerCustomer> customers = Agreements.Customers.Values.OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
+            _customers.Items.Clear();
+            _customers.Items.AddRange(customers.Cast<object>());
+        }
+
+        private static void ToggleOffer()
+        {
+            if (!Agreements.SetOfferOpen(!Agreements.OfferOpen, out string error))
+                WindowManager.SpawnDialog(error, false, DialogWindow.DialogType.Warning);
+            _playersKey = null;
+            Refresh();
+        }
+
+        private static void PickPrice(byte tier)
+        {
+            double vanilla = Server.GetISPCost();
+            double[] steps = Config.PlayerPriceSteps;
+            var labels = steps.Select(f => Money(f * vanilla) + " per Mbps a month (" + (f * 100).ToString("0", CultureInfo.InvariantCulture) + "% of vanilla)");
+            WindowManager.Instance.MultiWindow.Show(tier == Agreements.Premium ? "Premium price" : "Standard price", labels, (int i) =>
+            {
+                if (i < 0 || i >= steps.Length) return;
+                if (tier == Agreements.Premium) Agreements.SetPrices(Agreements.StandardPrice, steps[i]);
+                else Agreements.SetPrices(steps[i], Agreements.PremiumPrice);
+                _playersKey = null;
+                Refresh();
+            }, false);
+        }
+
+        private static void PickOfferPool()
+        {
+            List<string> pools = IspNetwork.Pools.OrderBy(x => x, StringComparer.Ordinal).ToList();
+            if (pools.Count == 0)
+            {
+                WindowManager.SpawnDialog("You have no ISP pools. Switch a server group to ISP mode first.", false, DialogWindow.DialogType.Warning);
+                return;
+            }
+            // "None" means: the pool with the most spare capacity.
+            WindowManager.Instance.MultiWindow.Show("Pool for player customers (None: most spare capacity)", pools, (int i) =>
+            {
+                Agreements.SetPool(i < 0 || i >= pools.Count ? null : pools[i]);
+                _playersKey = _procsKey = null;
+                Refresh();
+            }, true);
+        }
+
+        private static void ConnectTo(PlayerOffer o, byte tier)
+        {
+            if (o == null) return;
+            if (!Agreements.Connect(o, tier, out string error))
+                WindowManager.SpawnDialog(error, false, DialogWindow.DialogType.Warning);
+            _playersKey = null;
+            Refresh();
+        }
+
+        private static void LeaveAgreement()
+        {
+            PlayerAgreement a = Agreements.Current;
+            if (a == null)
+            {
+                WindowManager.SpawnDialog("You have no ISP agreement with another player.", false, DialogWindow.DialogType.Information);
+                return;
+            }
+            double fee = Agreements.LeaveFee();
+            WindowManager.Instance.MultiWindow.Show("Leave " + a.Name + "'s ISP?", new[] { "Leave and pay a fee of " + Money(fee), "Stay connected" }, (int i) =>
+            {
+                if (i == 0 && Agreements.Current == a) Agreements.Leave();
+                _playersKey = null;
+                Refresh();
+            }, false);
+        }
+
+        private static void DropCustomer(PlayerCustomer c)
+        {
+            if (c == null) return;
+            WindowManager.Instance.MultiWindow.Show("Stop serving " + c.Name + "?", new[] { "Drop them (no fee for them, you lose some reputation)", "Keep serving them" }, (int i) =>
+            {
+                if (i == 0) Agreements.Drop(c);
+                _playersKey = _procsKey = null;
+                Refresh();
+            }, false);
+        }
+
         private static void OpenDeals()
         {
             DealWindow w = HUD.Instance != null ? HUD.Instance.dealWindow : null;
@@ -312,7 +501,8 @@ namespace ISPBusiness
         private static void Refresh()
         {
             if (_window == null) return;
-            if (_townsTab) RefreshTowns();
+            if (_tab == TabTowns) RefreshTowns();
+            else if (_tab == TabPlayers) RefreshPlayers();
             else RefreshNetwork();
         }
 
@@ -484,7 +674,7 @@ namespace ISPBusiness
                 WindowManager.SpawnDialog(isp
                     ? "\"" + name + "\" is now an ISP pool. Manage it in the ISP Network window. Press ISP mode again to put it back to hosting."
                     : "\"" + name + "\" is back to hosting.", false, DialogWindow.DialogType.Information);
-            _groupsKey = _procsKey = _summaryKey = _townKey = null;
+            _groupsKey = _procsKey = _summaryKey = _townKey = _playersKey = null;
             if (_window != null) Refresh();
         }
 
