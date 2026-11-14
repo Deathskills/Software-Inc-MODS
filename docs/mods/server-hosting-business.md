@@ -1,0 +1,29 @@
+# Server Hosting Business: status and history
+
+Turns server hosting into a real business line. Source in `Server Hosting Business/src/`, user docs in `Server Hosting Business/README.md`, rate model in [../reference/hosting-rates-and-income-model.md](../reference/hosting-rates-and-income-model.md), power price study in [../reference/hosting-power-options.md](../reference/hosting-power-options.md).
+
+## Current state (14 Nov 2026)
+
+- Repo (default branch) has the merged state from PRs #2 and #3, including a prebuilt `ServerHostingBusiness.dll` (sha256 `be75ec0c…885e`).
+- **Neither PC runs the repo DLL.** Checked 14 Nov: the 4090 has `3efcc675…f137` (built 13 Nov 21:08 from the unmerged PR #6 source; PR #6 itself still carries the old `be75ec0c` DLL). The laptop has `f52c78fb…29d9`, which matches neither and hasn't been traced. Rebuild from the source you mean to run and reinstall on both PCs to get them in step.
+- Needs 0HarmonyLoader. Meant for new games, not existing saves.
+
+## History
+
+| PR | What |
+|---|---|
+| #2 | Mod added. Era-based bandwidth curves for OS, Antivirus and Office with Network, new Multiplayer and MMO curves. Extra hosting offers for unhosted AI products over 1 Mbps (no monthly cap, offer threshold lowered to 1 Mbps), AI-owned subsidiaries can ask for hosting. Load-error fixes (dropped `System.Reflection` / `System.IO` use to pass the security check). |
+| #3 | Hosting power priced as a fixed $7 per Mbps per month (Marc's choice among $4/$6/$7; an intermediate version priced power from the player's own servers). |
+
+Pay per Mbps per month = ISP cost (vanilla `Server.GetISPCost`) + $7 power + profit (Multiplayer $2.00, MMO $6.00, OS/Antivirus/Office $8.55), profit scaled 80%–120% by business stars. Price locked when the offer is made.
+
+Expected deal-window rates at 4 stars after PR #3 (city map, per Mb per hour): OS / Antivirus / Office about $1.40, MMO about $1.29, Multiplayer about $1.11. At 3 stars an OS offer should show about $1.38. Marc had not yet confirmed a live offer when the thread went quiet.
+
+## Open items
+
+1. **Confirm an in-game offer** matches the expected rates above.
+2. **Optional:** small display-only patch so "Maximum bandwidth usage" in the deal window counts the mod's bandwidth instead of showing 0. Offered, not requested.
+3. **Draft PR #6** also changes this mod: offers are priced as they arrive (vanilla hosting offers too), repricing is off in multiplayer, and open mod offers for products under 24 months old can expire on load. Unmerged, but its build is what runs on the 4090 (see above).
+4. Business-star scaling uses 0–5 stars; vanilla max is 6 stars (`BusinessStars = floor(rep × 6)`). Worth a check.
+5. **Double pay with ISP Business** on the same traffic, and much larger ISP demand when both are installed (see `isp-business.md`).
+6. Interaction details with ISP Business (both postfix-only, different Harmony IDs, no overlapping patches) are listed in [../reference/isp-phase1-findings.md](../reference/isp-phase1-findings.md) §2.

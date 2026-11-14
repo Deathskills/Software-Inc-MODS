@@ -1,0 +1,231 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Hosting Income Comparison</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: one reading column; a combined rates chart up top, then a year-driven scenario table. */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --fg:#14181c; --muted:#5a636c; --faint:#8b939b;
+  --line:#dde1e5; --grid:#eceff1; --accent:#1f6f8b; --chip:#e6eef2;
+  --good:#1d7a46; --warn:#a86a00;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#6250d6; --s8:#e34948;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111417; --surface:#181c20; --fg:#eef1f3; --muted:#a6afb7; --faint:#77808a; --line:#2b3238; --grid:#22282d; --accent:#5fb3d0; --chip:#1f2a31;
+  --good:#4cc283; --warn:#e0a234;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111417; --surface:#181c20; --fg:#eef1f3; --muted:#a6afb7; --faint:#77808a; --line:#2b3238; --grid:#22282d; --accent:#5fb3d0; --chip:#1f2a31;
+  --good:#4cc283; --warn:#e0a234;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55}
+.wrap{max-width:1080px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px;display:grid;gap:28px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:1.9rem} h2{font-size:1.25rem}
+p{margin:0;max-width:68ch}
+.lede{color:var(--muted)}
+.eyebrow{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+section{display:grid;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;min-width:0}
+.rates{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.rate{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:2px}
+.rate .k{font-size:.8rem;color:var(--muted)}
+.rate .v{font-family:var(--f-mono);font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums}
+.rate .s{font-size:.8rem;color:var(--faint)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.legend{display:flex;flex-wrap:wrap;gap:6px}
+button.lg,button.tg,button.yr{font:inherit;font-size:.82rem;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:999px;padding:4px 10px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+button.lg[aria-pressed="false"]{opacity:.45}
+button.tg[aria-pressed="true"],button.yr[aria-pressed="true"]{background:var(--chip);border-color:var(--accent)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sw{width:14px;height:3px;border-radius:2px;display:inline-block}
+.sw.dash{background:none!important;border-top:2px dashed currentColor;height:0}
+.chartbox{position:relative;overflow-x:auto}
+svg{display:block;width:100%;height:auto}
+svg text{fill:var(--muted);font-family:var(--f-mono);font-size:11px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:.8rem;box-shadow:0 4px 14px rgba(0,0,0,.12);min-width:190px;display:grid;gap:2px}
+.tip .row{display:flex;justify-content:space-between;gap:12px;font-variant-numeric:tabular-nums}
+.tip .row span:last-child{font-family:var(--f-mono)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:860px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--grid);vertical-align:top}
+th{font-size:.75rem;color:var(--muted);font-weight:600;letter-spacing:.03em;text-transform:uppercase;background:var(--surface);position:sticky;top:0}
+td:first-child,th:first-child{text-align:left}
+td .bw{font-family:var(--f-mono);font-size:.85rem}
+td .pf{font-family:var(--f-mono);font-size:.85rem;color:var(--good)}
+td .dim{color:var(--faint);font-size:.78rem}
+tr.grp td{background:var(--bg);font-family:var(--f-display);font-weight:600;font-size:.9rem;text-align:left;color:var(--fg)}
+.tag{font-size:.7rem;border-radius:4px;padding:1px 6px;background:var(--chip);color:var(--muted);margin-left:6px;white-space:nowrap}
+ol.q{margin:0;padding-left:20px;display:grid;gap:8px;max-width:72ch}
+.note{font-size:.85rem;color:var(--muted)}
+select{font:inherit;font-size:.85rem;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+@media (max-width:520px){h1{font-size:1.5rem}}
+</style>
+<style>
+.lgs{display:inline-flex;gap:6px;align-items:center;font-size:.82rem;color:var(--muted);margin-right:12px}
+tr.five td{background:var(--bg)}
+#tblAssume{min-width:640px}
+#tblAssume input{width:80px;font:inherit;font-size:.85rem;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);text-align:right;font-family:var(--f-mono)}
+#tblB{min-width:640px}
+#segs button{font-size:.78rem}
+</style>
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <div class="eyebrow">Software Inc. mod · vanilla vs Server Hosting Business</div>
+    <h1>Hosting Income: Vanilla vs Mod</h1>
+    <p class="lede">Monthly hosting profit per product, and an estimate of how many AI hosting offers you get per year, from 1985 to 2020. Pick a userbase to scale every number.</p>
+  </header>
+
+  <section>
+    <div class="controls"><span class="note">Users per product</span><div class="controls" id="tiers"></div></div>
+  </section>
+
+  <section>
+    <h2>1. Hosting profit per deal, by year</h2>
+    <p class="note">Monthly profit for hosting one product with the chosen userbase. Vanilla pays about $2.70 per Mbps on average (5–25% over the $18 ISP cost, by stars). The mod pays $2.00 (Multiplayer), $6.00 (MMO) or $8.55 (OS, Antivirus, Office) at the star midpoint.</p>
+    <div class="panel">
+      <div class="controls" id="segs"></div>
+      <div class="chartbox" id="boxA"><svg id="chartA" viewBox="0 0 1000 360" role="img" aria-label="Monthly profit per deal by year, vanilla and mod"></svg><div class="tip" id="tipA" hidden></div></div>
+      <div class="legend"><span class="lgs"><span class="sw" style="background:var(--s1)"></span>Mod</span><span class="lgs"><span class="sw dash" style="color:var(--faint)"></span>Vanilla</span></div>
+    </div>
+    <div class="tablewrap"><table id="tblA"></table></div>
+    <p class="note">Each cell shows vanilla on top and the mod below. "—" means no deal exists, because the product needs no servers in that setup or year.</p>
+  </section>
+
+  <section>
+    <h2>2. Hosting offers per year and their potential profit</h2>
+    <p class="note"><b>This is an estimate.</b> The game doesn't have a fixed number of AI releases. Company counts come from the game's company types (Games 3–6 companies, Computer OS 2, Console OS 2–3, Phone OS 2–3, Antivirus 2, Office 2). How often they release and which features they pick are my assumptions, and you can edit them below.</p>
+    <div class="tablewrap"><table id="tblAssume"></table></div>
+    <div class="panel">
+      <div class="chartbox" id="boxB"><svg id="chartB" viewBox="0 0 1000 320" role="img" aria-label="Hosting offers per year, vanilla and mod"></svg><div class="tip" id="tipB" hidden></div></div>
+      <div class="legend"><span class="lgs"><span class="sw" style="background:var(--s1)"></span>Mod offers / year</span><span class="lgs"><span class="sw dash" style="color:var(--faint)"></span>Vanilla offers / year</span></div>
+    </div>
+    <div class="tablewrap"><table id="tblB"></table></div>
+    <div class="note" style="display:grid;gap:6px;max-width:72ch">
+      <p><b>How offers are counted.</b> Vanilla: one offer per AI release that has a vanilla server feature, at any size. Mod: those same offers, plus one for every unhosted AI product (subsidiaries of AI companies included) that needs more than 1 Mbps. Each one can ask again every 6 months.</p>
+      <p><b>Potential profit</b> is the monthly profit you'd add if you accepted every offer from that year, with every product at the chosen userbase. Deals made in earlier years keep paying on top of this.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- rate model (same as the mod)
+const YEARS5=[1985,1990,1995,2000,2005,2010,2015,2020,2025];
+const BASE={pc:[0.01,0.05,0.5,3,12,35,105,220,355],console:[0,0,0,0.1,1,12,55,125,191],phone:[0,0,0,0,0.1,5,35,95,142],
+ av:[0.01,0.05,0.5,3,12,25,45,60,75],offOff:[0.01,0.03,0.3,2,8,15,25,35,45],offCloud:[0,0,0,0.1,0.5,8,45,180,560]};
+function baseAt(k,y){const v=BASE[k];if(y<=1985)return v[0];if(y>=2025)return Math.max(0,v[8]+(v[8]-v[7])/5*(y-2025));const i=Math.floor((y-1985)/5),t=(y-YEARS5[i])/5;if(t===0)return v[i];if(v[i]===0)return 0;return v[i]+(v[i+1]-v[i])*t;}
+const F=y=>0.75+Math.log10(y-1969);
+function mpAt(y){if(y<1990)return 0;const a=30*F(1990);if(y<=2000)return a+(120-a)*(y-1990)/10;if(y<=2010)return 120+230*(y-2000)/10;if(y<=2020)return 350+150*(y-2010)/10;return 500*Math.pow(1.05,(y-2020)/5);}
+function mmoAt(y){if(y<1990)return 0;const a=230*F(1990);if(y<=2020)return a+(900-a)*(y-1990)/30;return 900*Math.pow(1.05,(y-2020)/5);}
+const VAN_PROFIT=18*0.15, P={mp:2,mmo:6,ent:8.55};
+
+// Section 1 product setups: vanilla Mbps/100k and mod Mbps/100k, and the mod profit class.
+const SETUPS=[
+ {id:'mp',n:'Game, Multiplayer',from:1990,van:y=>30*F(y),mod:mpAt,cls:'mp'},
+ {id:'mmo',n:'Game, MMO',from:1990,van:y=>230*F(y),mod:mmoAt,cls:'mmo'},
+ {id:'pc1',n:'Computer OS + Auto-update',from:1985,van:y=>20*F(y),mod:y=>baseAt('pc',y)+20*F(y),cls:'ent'},
+ {id:'pc0',n:'Computer OS, no add-ons',from:1985,van:y=>0,mod:y=>baseAt('pc',y),cls:'ent'},
+ {id:'con1',n:'Console OS + Auto-update',from:1985,van:y=>20*F(y),mod:y=>baseAt('console',y)+20*F(y),cls:'ent'},
+ {id:'ph1',n:'Phone OS + Auto-update',from:1995,van:y=>20*F(y),mod:y=>baseAt('phone',y)+20*F(y),cls:'ent'},
+ {id:'av1',n:'Antivirus, Network + Virus database',from:1985,van:y=>10*F(y),mod:y=>baseAt('av',y)+10*F(y),cls:'ent'},
+ {id:'av0',n:'Antivirus, Network only',from:1985,van:y=>0,mod:y=>baseAt('av',y),cls:'ent'},
+ {id:'of1',n:'Office, Network + Cloud backup',from:1985,van:y=>100*F(y),mod:y=>baseAt('offOff',y)+baseAt('offCloud',y)+100*F(y),cls:'ent'},
+ {id:'of0',n:'Office, Network only',from:1985,van:y=>0,mod:y=>baseAt('offOff',y),cls:'ent'},
+];
+const TIERS=[1e5,1e6,5e6,1e7,3e7,5e7,1e8];
+const tierName=u=>u>=1e6?(u/1e6)+'M':(u/1e3)+'k';
+let tier=1e6, seg='mp';
+const fmtBw=m=>m<=0?'—':m>=1e6?(m/1e6).toFixed(2)+' Tbps':m>=1000?(m/1000).toFixed(m>=1e4?0:1)+' Gbps':m>=10?Math.round(m)+' Mbps':m.toFixed(m>=1?1:2)+' Mbps';
+const money=v=>v<=0?'—':v>=1e9?'$'+(v/1e9).toFixed(2)+'B':v>=1e6?'$'+(v/1e6).toFixed(v>=1e8?0:2)+'M':v>=1e3?'$'+(v/1e3).toFixed(v>=1e5?0:1)+'k':'$'+v.toFixed(v<10?2:0);
+function dealProfit(s,y,users,mod){if(y<s.from)return 0;const bw=(mod?s.mod(y):s.van(y))*users/1e5;return bw*(mod?P[s.cls]:VAN_PROFIT);}
+
+// ---------- Section 2 market assumptions (editable)
+const MARKET=[
+ {id:'mp',n:'Games, Multiplayer only',rel:3.4,life:2,van:1.0,mod:1.0,from:1990,
+   vbw:y=>30*F(y),mbw:mpAt,cls:'mp'},
+ {id:'mmo',n:'Games, MMO',rel:0.9,life:3,van:1.0,mod:1.0,from:1990,
+   vbw:y=>230*F(y),mbw:mmoAt,cls:'mmo'},
+ {id:'pc',n:'Computer OS',rel:0.7,life:5,van:0.6,mod:1.0,from:1985,
+   vbw:y=>30*F(y),mbw:(y,a)=>baseAt('pc',y)+a.van*30*F(y),cls:'ent'},
+ {id:'con',n:'Console OS',rel:0.6,life:5,van:0.3,mod:1.0,from:1985,
+   vbw:y=>30*F(y),mbw:(y,a)=>baseAt('console',y)+a.van*30*F(y),cls:'ent'},
+ {id:'ph',n:'Phone OS',rel:1.2,life:4,van:0.6,mod:1.0,from:1995,
+   vbw:y=>30*F(y),mbw:(y,a)=>baseAt('phone',y)+a.van*30*F(y),cls:'ent'},
+ {id:'av',n:'Antivirus',rel:2.0,life:2,van:0.5,mod:0.7,from:1985,
+   vbw:y=>10*F(y),mbw:(y,a)=>baseAt('av',y)+(a.van/Math.max(a.mod,0.01))*10*F(y),cls:'ent'},
+ {id:'of',n:'Office',rel:1.0,life:3,van:0.5,mod:0.8,from:1985,
+   vbw:y=>100*F(y),mbw:(y,a)=>baseAt('offOff',y)+(a.van/Math.max(a.mod,0.01))*(baseAt('offCloud',y)+100*F(y)),cls:'ent'},
+];
+function yearStats(y,users){
+ let vOff=0,vProfit=0,mOffVan=0,mVanProfit=0,pool=[];
+ MARKET.forEach(a=>{if(y<a.from)return;
+  const vo=a.rel*a.van; vOff+=vo; vProfit+=vo*a.vbw(y)*users/1e5*VAN_PROFIT;
+  // in the mod, vanilla's release offers still come, priced and sized by the mod
+  const mbw=a.mbw(y,a); mOffVan+=vo; mVanProfit+=vo*mbw*users/1e5*P[a.cls];
+  const mbps=mbw*users/1e5;
+  if(mbps>=1){const products=a.rel*a.life*a.mod; pool.push({n:products*2,p:mbps*P[a.cls]});}
+ });
+ const want=pool.reduce((s,x)=>s+x.n,0), extra=want;
+ const extraProfit=want>0?pool.reduce((s,x)=>s+x.n*x.p,0)/want*extra:0;
+ const mOff=mOffVan+extra, mProfit=mVanProfit+extraProfit;
+ return {vOff,mOff,vAvg:vOff?vProfit/vOff:0,mAvg:mOff?mProfit/mOff:0,vProfit,mProfit,extra};
+}
+
+// ---------- UI
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const tiersEl=document.getElementById('tiers');
+TIERS.forEach(u=>{const b=document.createElement('button');b.className='yr';b.id='tier-'+u;b.textContent=tierName(u);b.setAttribute('aria-pressed',u===tier);b.onclick=()=>{tier=u;tiersEl.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));render();};tiersEl.appendChild(b);});
+const segsEl=document.getElementById('segs');
+SETUPS.forEach(s=>{const b=document.createElement('button');b.className='yr';b.id='seg-'+s.id;b.textContent=s.n;b.setAttribute('aria-pressed',s.id===seg);b.onclick=()=>{seg=s.id;segsEl.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));render();};segsEl.appendChild(b);});
+
+const YEARS=[];for(let y=1985;y<=2020;y++)YEARS.push(y);
+function lineChart(svgId,tipId,boxId,series,fmtV,yLabel){
+ const svg=document.getElementById(svgId),W=1000,H=+svg.getAttribute('viewBox').split(' ')[3],M={l:70,r:16,t:18,b:30};
+ let max=0;series.forEach(s=>YEARS.forEach(y=>max=Math.max(max,s.f(y))));if(max<=0)max=1;
+ const mag=Math.pow(10,Math.floor(Math.log10(max)));max=Math.ceil(max/mag)*mag;
+ const xs=y=>M.l+(y-1985)/35*(W-M.l-M.r), ys=v=>M.t+(H-M.t-M.b)*(1-v/max);
+ let g='';[0,.25,.5,.75,1].forEach(t=>{const v=max*t,y=ys(v);g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${y}" y2="${y}" stroke="${css('--grid')}"/><text x="${M.l-8}" y="${y+4}" text-anchor="end">${fmtV(v)}</text>`;});
+ for(let y=1985;y<=2020;y+=5){const x=xs(y);g+=`<text x="${x}" y="${H-M.b+18}" text-anchor="middle">${y}</text>`;}
+ g+=`<line x1="${M.l}" x2="${W-M.r}" y1="${H-M.b}" y2="${H-M.b}" stroke="${css('--line')}"/><text x="${M.l}" y="${M.t-6}" style="font-size:10px">${yLabel}</text>`;
+ series.forEach(s=>{let d='';YEARS.forEach((y,i)=>{d+=(i?'L':'M')+xs(y).toFixed(1)+','+ys(s.f(y)).toFixed(1);});g+=`<path d="${d}" fill="none" stroke="${s.c}" stroke-width="2" ${s.dash?'stroke-dasharray="5 4"':''}/>`;});
+ g+=`<line class="xh" x1="0" x2="0" y1="${M.t}" y2="${H-M.b}" stroke="${css('--faint')}" visibility="hidden"/><rect class="hit" x="${M.l}" y="${M.t}" width="${W-M.l-M.r}" height="${H-M.t-M.b}" fill="transparent"/>`;
+ svg.innerHTML=g;const hit=svg.querySelector('.hit'),xh=svg.querySelector('.xh'),tip=document.getElementById(tipId),box=document.getElementById(boxId);
+ hit.onpointermove=ev=>{const r=svg.getBoundingClientRect();let y=Math.round(1985+((ev.clientX-r.left)/r.width*W-M.l)/(W-M.l-M.r)*35);y=Math.max(1985,Math.min(2020,y));const x=xs(y);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');
+  tip.innerHTML=`<b>${y}</b>`+series.map(s=>`<div class="row"><span>${s.name}</span><span>${fmtV(s.f(y))}</span></div>`).join('');tip.hidden=false;const br=box.getBoundingClientRect();let lx=ev.clientX-br.left+14;if(lx+220>br.width)lx-=250;tip.style.left=lx+'px';tip.style.top='8px';};
+ hit.onpointerleave=()=>{tip.hidden=true;xh.setAttribute('visibility','hidden');};
+}
+
+function render(){
+ const s=SETUPS.find(x=>x.id===seg);
+ lineChart('chartA','tipA','boxA',[
+  {name:'Mod',c:css('--s1'),f:y=>dealProfit(s,y,tier,true)},
+  {name:'Vanilla',c:css('--faint'),dash:true,f:y=>dealProfit(s,y,tier,false)}],money,`${s.n} · ${tierName(tier)} users · profit per month`);
+ // table A: years x tiers for the selected setup
+ let h='<thead><tr><th>Year</th><th>Vanilla / mod Mbps per 100k</th>'+TIERS.map(u=>`<th>${tierName(u)} users</th>`).join('')+'</tr></thead><tbody>';
+ YEARS.forEach(y=>{const on=y>=s.from;h+=`<tr${y%5===0?' class="five"':''}><td>${y}</td><td><span class="dim">${on?s.van(y).toFixed(1):'—'}</span><br><span class="bw">${on?s.mod(y).toFixed(1):'—'}</span></td>`;
+  TIERS.forEach(u=>{h+=`<td><div class="dim">${money(dealProfit(s,y,u,false))}</div><div class="pf">${money(dealProfit(s,y,u,true))}</div></td>`;});h+='</tr>';});
+ document.getElementById('tblA').innerHTML=h+'</tbody>';
+ // section 2
+ const st=YEARS.map(y=>[y,yearStats(y,tier)]);
+ lineChart('chartB','tipB','boxB',[
+  {name:'Mod',c:css('--s1'),f:y=>yearStats(y,tier).mOff},
+  {name:'Vanilla',c:css('--faint'),dash:true,f:y=>yearStats(y,tier).vOff}],v=>v.toFixed(1),`Offers per year · every product at ${tierName(tier)} users`);
+ let b='<thead><tr><th>Year</th><th>Offers / yr<br>vanilla · mod</th><th>Avg deal profit / mo<br>vanilla · mod</th><th>Potential profit / mo from that year\'s offers<br>vanilla · mod</th></tr></thead><tbody>';
+ st.forEach(([y,r])=>{b+=`<tr${y%5===0?' class="five"':''}><td>${y}</td><td><span class="dim">${r.vOff.toFixed(1)}</span> · <span class="bw">${r.mOff.toFixed(1)}</span></td><td><span class="dim">${money(r.vAvg)}</span> · <span class="pf">${money(r.mAvg)}</span></td><td><span class="dim">${money(r.vProfit)}</span> · <span class="pf">${money(r.mProfit)}</span></td></tr>`;});
+ document.getElementById('tblB').innerHTML=b+'</tbody>';
+}
+// assumptions table
+function renderAssume(){
+ let h='<thead><tr><th>Market segment</th><th>AI releases / year</th><th>Years on the market</th><th>Share with a vanilla server feature</th><th>Share that needs servers in the mod</th></tr></thead><tbody>';
+ MARKET.forEach((a,i)=>{const inp=(k,step)=>`<input id="as-${a.id}-${k}" type="number" min="0" step="${step}" value="${a[k]}" data-i="${i}" data-k="${k}" aria-label="${a.n} ${k}">`;
+  h+=`<tr><td>${a.n}<span class="tag">from ${a.from}</span></td><td>${inp('rel',0.1)}</td><td>${inp('life',0.5)}</td><td>${inp('van',0.05)}</td><td>${inp('mod',0.05)}</td></tr>`;});
+ const t=document.getElementById('tblAssume');t.innerHTML=h+'</tbody>';
+ t.querySelectorAll('input').forEach(el=>el.oninput=()=>{const v=parseFloat(el.value);if(!isNaN(v)&&v>=0){MARKET[+el.dataset.i][el.dataset.k]=v;render();}});
+}
+renderAssume();render();
+const mq=window.matchMedia('(prefers-color-scheme: dark)');mq.addEventListener&&mq.addEventListener('change',render);
+new MutationObserver(render).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>
+
+</body></html>
