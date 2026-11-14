@@ -4,7 +4,8 @@
 //  - idle ISP capacity draws little power and wears slowly
 //  - AI products offer ISP deals each month in the vanilla Deals window; deals pay per delivered Mbps,
 //    with performance and reputation
-//  - multiplayer: each player runs their own ISP; version handshake and deal claims between players
+//  - multiplayer: each player runs their own ISP; version handshake and deal claims between players;
+//    players can buy ISP service from each other (Agreements.cs)
 // Requires 0HarmonyLoader (Harmony 2.3.3). Without it the mod stays off.
 using System;
 using System.IO;
@@ -49,7 +50,7 @@ namespace ISPBusiness
         private Sprite _icon;
         private bool _iconTried;
 
-        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined, _pendingMuni, _pendingStats;
+        private string _pendingPools, _pendingAssign, _pendingDeals, _pendingDeclined, _pendingMuni, _pendingStats, _pendingP2P;
         private int _pendingNextId;
         private bool _hasPending;
 
@@ -79,6 +80,7 @@ namespace ISPBusiness
             _active = false;
             // Take ISP deals out of the vanilla Deals window first, while the save filter is still patched.
             try { VanillaDeals.RemoveAll(); } catch (Exception e) { Debug.LogError("[ISP Business] " + e); }
+            try { if (GameSettings.Instance != null) Agreements.EndAll(); } catch (Exception e) { Debug.LogError("[ISP Business] " + e); }
             Hooks.Enabled = false;
             // Put every ISP server back to vanilla power and wear before unpatching.
             foreach (string name in IspNetwork.Pools.ToArray())
@@ -107,6 +109,7 @@ namespace ISPBusiness
             data["ISP_NextId"] = Deals.NextId;
             data["ISP_Muni"] = Municipal.PackStates();
             data["ISP_Stats"] = IspNetwork.PackStats();
+            data["ISP_P2P"] = Agreements.PackSettings();
         }
 
         public override void Deserialize(WriteDictionary data, GameReader.LoadMode mode)
@@ -124,6 +127,7 @@ namespace ISPBusiness
             _pendingNextId = data.Get("ISP_NextId", 1);
             _pendingMuni = data.Get<string>("ISP_Muni", null);
             _pendingStats = data.Get<string>("ISP_Stats", null);
+            _pendingP2P = data.Get<string>("ISP_P2P", null);
             _hasPending = true;
             if (_seenGame != null && _seenGame == GameSettings.Instance) ApplyPending();
         }
@@ -139,8 +143,9 @@ namespace ISPBusiness
             Deals.UnpackDeals(_pendingDeals, _pendingDeclined, _pendingNextId);
             Municipal.UnpackStates(_pendingMuni);
             IspNetwork.UnpackStats(_pendingStats);
+            Agreements.UnpackSettings(_pendingP2P);
             Deals.MarkLoaded();
-            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = _pendingMuni = _pendingStats = null;
+            _pendingPools = _pendingAssign = _pendingDeals = _pendingDeclined = _pendingMuni = _pendingStats = _pendingP2P = null;
         }
 
         // ---------- main loop
@@ -162,6 +167,7 @@ namespace ISPBusiness
                     Deals.Reset();
                     Municipal.Reset();
                     VanillaDeals.Reset();
+                    Agreements.Reset();
                     Net.ResetSession();
                     IspWindow.Forget();
                     ApplyPending();

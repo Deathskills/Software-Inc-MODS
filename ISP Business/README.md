@@ -74,8 +74,16 @@ A Software Inc. code mod that lets you run your own Internet Service Provider. I
 - Each player runs their own ISP for their own company. No extra syncing is needed, because the game simulates each player's servers and bills on their own machine.
 - The mod checks which players run it, and which version.
 - When you accept an ISP deal, the other players are told, so they aren't offered that product and can't hold it at the same time. If two players accept at the same moment, the lower player number keeps it and the other deal is withdrawn without penalty.
-- Agreements between players come in a later milestone.
 - A player without the mod plays normally.
+
+**Buying and selling ISP service between players** (ISP window, Players tab, multiplayer only)
+- To sell: press "Open your offer". Set a standard and a premium price (a share of the vanilla ISP rate, 30% to 200%) and, if you want, the pool that carries your player customers. Your offer and its spare capacity are sent to every player with the same mod version, and again once a day.
+- To buy: pick a player's offer and press "Connect standard" or "Connect premium". Their game accepts it if the offer and the price still stand.
+- From then on, every hour, the internet traffic your own ISP pools don't carry goes to your provider. What they deliver comes off your vanilla "Internet" bill, and you pay them the agreed price for it once a day ("Player ISP": your Bills, their Deals income). The game can't cut a company's internet, so what the provider doesn't deliver stays on your vanilla bill.
+- The provider carries you as an ISP process on their pool, like a deal: it shares the pool's capacity, they pay transit and electricity on it, and good or bad months change their business reputation.
+- Standard: leaving costs a reconnection fee (one month of service at your recent use, at least $1,000), paid to the provider.
+- Premium: costs more. If a day's delivery falls under 95%, the agreement ends at once with no fee, you're back on the vanilla ISP, and the provider loses reputation.
+- Free endings: either player leaves the game or changes mod version, the provider's company closes, the provider drops you (that costs them reputation), or the mod is turned off. Agreements aren't saved: after loading a game everyone starts on the vanilla ISP.
 
 ## Requirements and install
 

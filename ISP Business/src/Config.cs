@@ -9,8 +9,8 @@ namespace ISPBusiness
         public const int SaveVersion = 1;
 
         /// <summary>Network protocol version. Players must match to share ISP agreements.</summary>
-        public const int ProtocolVersion = 3;
-        public const string ModVersion = "0.5.3";
+        public const int ProtocolVersion = 4;
+        public const string ModVersion = "0.6.0";
 
         /// <summary>Network id registered with the game for this mod's messages (first come, first served).</summary>
         public const byte NetworkId = 0xA7;
@@ -81,6 +81,15 @@ namespace ISPBusiness
         public const double MuniBreachRep = -0.1;              // business stars lost on a breach notice
         public const double MuniSuitPerResident = 2.0;         // lawsuit claim: $ per covered resident...
         public const double MuniSuitMin = 20000, MuniSuitMax = 2000000; // ...within these bounds
+
+        // ---- ISP agreements between players (spec 15). Prices are shares of the vanilla ISP rate.
+        public const double PlayerStandardDefault = 0.8;
+        public const double PlayerPremiumDefault = 1.1;
+        public static readonly double[] PlayerPriceSteps = { 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.75, 2.0 };
+        public const double PremiumMinService = 0.95;          // premium: a day under this ends the agreement
+        public const double ReconnectFeeMonths = 1.0;          // leaving costs this many months of service...
+        public const double ReconnectFeeMin = 1000;            // ...and at least this much
+        public const float ConnectTimeoutSeconds = 60f;        // real seconds to wait for the provider's answer
 
         /// <summary>Vanilla business-star buckets: stars 0..6 roll a multiplier in [1.05 + s*w, 1.05 + (s+1)*w].</summary>
         public static double StarMultiplier(int stars, double roll01)

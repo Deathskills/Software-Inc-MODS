@@ -39,7 +39,7 @@ namespace ISPBusiness
     /// <summary>One stream of ISP traffic: your own internet, or one deal.</summary>
     public sealed class IspProcess
     {
-        public string Key;          // "own" or "deal:<id>"
+        public string Key;          // "own", "deal:<id>" or "p2p:<player id>"
         public string Label;
         public double Demand;       // Mbps wanted in the last hour
         public double Delivered;    // Mbps delivered in the last hour
@@ -211,6 +211,7 @@ namespace ISPBusiness
             own.Demand = internetCostThisHour > 0 && ispRate > 0 ? internetCostThisHour / (ispRate / hoursPerMonth) : 0;
 
             Deals.RefreshDemand();
+            Agreements.RefreshDemand();
             Recalculate();
 
             if (own.Delivered > 0)
@@ -224,12 +225,16 @@ namespace ISPBusiness
                 MonthTransit += transit;
             }
 
+            // Traffic your pools don't carry goes to another player's ISP, if you have an agreement.
+            Agreements.CustomerHour(own, ispRate, hoursPerMonth);
+
             MonthHours += 1;
             MonthOwnMbpsH += own.Demand;
             MonthOwnServedMbpsH += own.Delivered;
             foreach (PoolState st in State.Values) MonthCarriedMbpsH += st.Assigned;
 
             Deals.OnHour(hoursPerMonth, transitRate);
+            Agreements.ProviderHour(hoursPerMonth, transitRate);
             ApplyPower();
         }
 

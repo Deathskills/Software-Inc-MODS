@@ -5,8 +5,10 @@
 // (one side decides). Money is never moved by a message: the paying player's game makes vanilla
 // transactions, which vanilla broadcasts.
 //
-// Milestone A only sends Hello: protocol + mod version, so players learn who runs a matching version.
-// Messages only reach players already in game, so Hello is re-sent to every player who appears.
+// Hello carries protocol + mod version, so players learn who runs a matching version. Then: deal claims,
+// town coverage, and agreements between players (offer, connect, reply, hourly usage and service, end).
+// Messages only reach players already in game, so Hello is re-sent to every player who appears, and
+// claims, coverage and an open offer are re-sent to them after it.
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,9 +24,19 @@ namespace ISPBusiness
         public const byte MsgClaim = 2;   // product id + 1 = claim / 0 = release, decided by the sender
         public const byte MsgCompanyClaim = 3;   // company id + 1 = claim / 0 = release (company-wide deal)
         public const byte MsgCoverage = 4;       // settlement id + residents the sender covers there (municipal)
+        // Agreements between players (Agreements.cs). Each one carries the decision of its sender only.
+        public const byte MsgOffer = 5;          // provider -> all: open, standard, premium, spare Mbps, company id
+        public const byte MsgConnect = 6;        // customer -> provider: token, tier, price
+        public const byte MsgReply = 7;          // provider -> customer: token, accepted, reason
+        public const byte MsgUsage = 8;          // customer -> provider, hourly: token, Mbps wanted
+        public const byte MsgService = 9;        // provider -> customer, hourly: token, share delivered
+        public const byte MsgEnd = 10;           // either side: token, reason
 
         public static ModController.DLLMod Mod;
         public static bool Registered;
+
+        /// <summary>Names of players in the game, for messages.</summary>
+        private static readonly Dictionary<byte, string> Names = new Dictionary<byte, string>();
 
         /// <summary>Peers that answered: player id -> (protocol, mod version).</summary>
         public static readonly Dictionary<byte, KeyValuePair<int, string>> Peers = new Dictionary<byte, KeyValuePair<int, string>>();
@@ -61,8 +73,12 @@ namespace ISPBusiness
             Greeted.Clear();
             Warned.Clear();
             GreetedAt.Clear();
+            Names.Clear();
             lock (Inbox) Inbox.Clear();
+            Agreements.ResetSession();
         }
+
+        public static string NameOf(byte id) { return Names.TryGetValue(id, out string n) ? n : "Player " + id; }
 
         // ---------- receive (may be called by the game's network code; handled on the main thread in Tick)
 
@@ -96,6 +112,7 @@ namespace ISPBusiness
             List<Incoming> batch;
             lock (Inbox) { batch = Inbox.ToList(); Inbox.Clear(); }
             foreach (Incoming m in batch) Handle(m);
+            Agreements.Tick();
 
             // Greet every player in the game once, and again after they leave and come back.
             var present = new HashSet<byte>();
@@ -103,6 +120,7 @@ namespace ISPBusiness
             {
                 if (p == null || p.Self) continue;
                 present.Add(p.ID);
+                Names[p.ID] = p.Name;
                 if (Greeted.Add(p.ID))
                 {
                     SendHello(p.ID, false);
@@ -122,6 +140,7 @@ namespace ISPBusiness
                 Peers.Remove(id);
                 Warned.Remove(id);
                 Deals.OnPlayerLeft(id);
+                Agreements.OnPlayerLeft(id, NameOf(id));
             }
         }
 
@@ -136,6 +155,8 @@ namespace ISPBusiness
                     string version = ReadString(m.Data, ref pos);
                     bool isReply = pos < m.Data.Length && m.Data[pos++] == 1;
                     Peers[m.From] = new KeyValuePair<int, string>(protocol, version);
+                    if (!string.IsNullOrEmpty(m.Name)) Names[m.From] = m.Name;
+                    if (protocol != Config.ProtocolVersion) Agreements.OnPlayerLeft(m.From, m.Name); // can't keep an agreement across versions
                     if (protocol != Config.ProtocolVersion && Warned.Add(m.From))
                     {
                         IspNetwork.PendingNotices.Add(m.Name + " runs ISP Business " + version + ", you run " + Config.ModVersion +
@@ -164,6 +185,54 @@ namespace ISPBusiness
                     double residents = ReadDouble(m.Data, ref pos);
                     Municipal.OnRemoteCoverage(m.From, settlement, residents);
                     break;
+                case MsgOffer:
+                {
+                    if (!PeerCompatible(m.From)) break;
+                    bool open = pos < m.Data.Length && m.Data[pos++] == 1;
+                    double std = ReadDouble(m.Data, ref pos);
+                    double prem = ReadDouble(m.Data, ref pos);
+                    double spare = ReadDouble(m.Data, ref pos);
+                    uint companyId = (uint)ReadInt(m.Data, ref pos);
+                    Agreements.OnOffer(m.From, m.Name, open, std, prem, spare, companyId);
+                    break;
+                }
+                case MsgConnect:
+                {
+                    if (!PeerCompatible(m.From)) break;
+                    int token = ReadInt(m.Data, ref pos);
+                    byte tier = pos < m.Data.Length ? m.Data[pos++] : (byte)0;
+                    double price = ReadDouble(m.Data, ref pos);
+                    Agreements.OnConnect(m.From, m.Name, token, tier, price);
+                    break;
+                }
+                case MsgReply:
+                {
+                    if (!PeerCompatible(m.From)) break;
+                    int token = ReadInt(m.Data, ref pos);
+                    bool ok = pos < m.Data.Length && m.Data[pos++] == 1;
+                    string reason = ReadString(m.Data, ref pos);
+                    Agreements.OnReply(m.From, m.Name, token, ok, reason);
+                    break;
+                }
+                case MsgUsage:
+                {
+                    int token = ReadInt(m.Data, ref pos);
+                    Agreements.OnUsage(m.From, token, ReadDouble(m.Data, ref pos));
+                    break;
+                }
+                case MsgService:
+                {
+                    int token = ReadInt(m.Data, ref pos);
+                    Agreements.OnService(m.From, token, ReadDouble(m.Data, ref pos));
+                    break;
+                }
+                case MsgEnd:
+                {
+                    int token = ReadInt(m.Data, ref pos);
+                    byte reason = pos < m.Data.Length ? m.Data[pos++] : (byte)0;
+                    Agreements.OnEnd(m.From, m.Name, token, reason);
+                    break;
+                }
             }
         }
 
@@ -202,8 +271,70 @@ namespace ISPBusiness
             return b.ToArray();
         }
 
+        // ---------- agreements between players
+
+        private static byte[] OfferBytes()
+        {
+            GameSettings gs = GameSettings.Instance;
+            var b = new List<byte> { MsgOffer, Agreements.OfferOpen ? (byte)1 : (byte)0 };
+            WriteDouble(b, Agreements.StandardPrice);
+            WriteDouble(b, Agreements.PremiumPrice);
+            WriteDouble(b, Agreements.Spare());
+            WriteInt(b, unchecked((int)(gs != null && gs.MyCompany != null ? gs.MyCompany.ID : 0u)));
+            return b.ToArray();
+        }
+
+        /// <summary>Sends our ISP offer (or that it's closed) to every other player.</summary>
+        public static void BroadcastOffer()
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (!Registered || gs == null || !gs.IsNetworkMode) return;
+            try { Mod.SendNetworkMessage(OfferBytes(), ModBehaviour.MessageTarget.EveryoneButMe, 0); }
+            catch (Exception e) { Debug.LogError("[ISP Business] Send failed: " + e.Message); }
+        }
+
+        public static void SendConnect(byte provider, int token, byte tier, double price)
+        {
+            var b = new List<byte> { MsgConnect };
+            WriteInt(b, token);
+            b.Add(tier);
+            WriteDouble(b, price);
+            Send(b.ToArray(), provider);
+        }
+
+        public static void SendReply(byte customer, int token, bool accepted, string reason)
+        {
+            var b = new List<byte> { MsgReply };
+            WriteInt(b, token);
+            b.Add(accepted ? (byte)1 : (byte)0);
+            WriteString(b, reason);
+            Send(b.ToArray(), customer);
+        }
+
+        public static void SendUsage(byte provider, int token, double mbps) { SendTokenDouble(MsgUsage, provider, token, mbps); }
+        public static void SendService(byte customer, int token, double share) { SendTokenDouble(MsgService, customer, token, share); }
+
+        private static void SendTokenDouble(byte type, byte target, int token, double v)
+        {
+            if (!Registered) return;
+            var b = new List<byte> { type };
+            WriteInt(b, token);
+            WriteDouble(b, v);
+            Send(b.ToArray(), target);
+        }
+
+        public static void SendEnd(byte target, int token, byte reason)
+        {
+            if (!Registered) return;
+            var b = new List<byte> { MsgEnd };
+            WriteInt(b, token);
+            b.Add(reason);
+            Send(b.ToArray(), target);
+        }
+
         private static void SendClaimsTo(byte target)
         {
+            if (Agreements.OfferOpen) Send(OfferBytes(), target);
             foreach (var kv in Municipal.MyCoverages().ToList()) Send(CoverageBytes(kv.Key, kv.Value), target);
             foreach (uint id in Deals.MyClaims().ToList()) Send(ClaimBytes(MsgClaim, id, true), target);
             foreach (uint id in Deals.MyCompanyClaims().ToList()) Send(ClaimBytes(MsgCompanyClaim, id, true), target);
