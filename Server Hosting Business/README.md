@@ -59,6 +59,18 @@ Without 0HarmonyLoader the mod still loads, but only the offer and pricing parts
 - Works alongside **Realistic Population growth**. Bigger populations mean bigger userbases, so bandwidth and hosting income grow with it.
 - Other mods that rewrite hosting deals or server load (for example ones that replace `GetLoadRequirement` or deal pricing) will conflict.
 
+## MegaMod Data
+
+Game features use these exact, case-sensitive name groups (MMO takes priority):
+
+- **MMO triggers:** MMO, MMORPG, Persistent Servers, Persistent world servers, PvPvE servers.
+- **Multiplayer triggers:** Multiplayer, Online Multiplayer, Dedicated Server.
+- **Covered online-play features:** Online Lobby, Live Chat, Reconnection at Match, Automatic Balancing, Lag Compensation, Crossplay, LAN Matchmaking, NAT Traversal, Encrypted Multiplayer, DDoS Protection, Session Persistence, Server Browser, Matchmaking with MMR, Anti-Cheat Multiplayer, Cross-Region Play, Voice Chat, Spectator Mode, PvP, Battle Royale Mode, Ranked Matchmaking, Online tables, Role queue, Asynchronous messages, Cloud Saving, Live Service Platform, Global Ranking, Clan & Guild System, Guild system, Multi Panel, Multiplatform, Remote Play, Remote Play Together.
+
+The third group never triggers a curve by itself. Once a game matches either trigger group, all three groups are covered by this mod's multiplayer/MMO curve instead of their raw feature loads. All other features (the small general services such as Cloud Sync, Telemetry, Trading System, Battle pass and Anti-cheat) keep their normal server requirements on top. Vanilla Multiplayer/MMO behaviour is unchanged.
+
+OS, Antivirus and Office Software already match by name. MegaMod's extra OS device types reuse the three existing curves: Server and Supercomputer use the Computer curve; Smart TV, VR Headset and Emulator use the Console curve; Tablet, Watch and Car use the Phone curve. Anti-Piracy and Game Engine are not changed.
+
 ## Building
 
 The source is in `src/`. Build with the .NET SDK:

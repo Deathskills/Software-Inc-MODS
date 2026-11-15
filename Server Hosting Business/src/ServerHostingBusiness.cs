@@ -27,8 +27,8 @@ namespace ServerHostingBusiness
                 "Hosting profit per Mbps per month (on top of ISP + power): Multiplayer $2.00, MMO $6.00, " +
                 "OS / Antivirus / Office $8.55, scaled 80-120% by business stars.\n" +
                 "OS, and Antivirus/Office with Network, need bandwidth that grows each year.\n" +
-                harmony;
-            WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 420f, 96f), new Rect(0f, 0f, 1f, 0f));
+                harmony + (Profiles.MegaModTermsSeen ? "\nMegaMod Data game features detected." : "");
+            WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 420f, 120f), new Rect(0f, 0f, 1f, 0f));
         }
     }
 

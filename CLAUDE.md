@@ -62,8 +62,10 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 - Without `-p:ManagedDir`, the csproj expects the repo folder to sit inside `<game>\DLLMods\` (`..\..\..\Software Inc_Data\Managed`).
 - Linux/cloud: `apt-get install dotnet-sdk-8.0` works (the dot.net download host may be blocked); copy the game's Managed DLLs from a PC and pass that folder as `ManagedDir`.
 - Earlier builds on the 4090 used a standalone Roslyn 4.8 `csc` with C# 9 against the same references when the .NET SDK wasn't available.
+- The 4090 has .NET SDK 11.0.100 since 15 Nov 2026 (`dotnet build` works). The GitHub CLI (`gh`) is not installed there, so PRs are opened from the GitHub website.
 - **After building, run a security check** of the DLL's referenced types against the game's blocklist (earlier sessions did this with the game's own `Mono.Cecil.dll`). It must pass without `GiveMeFreedom`.
 - Realistic Population growth is a source mod: the game compiles `RealisticPopulation.cs` itself; nothing to build.
+- **Source mods are rewritten by the game before compiling** (`ModController.InjectTryBlocks`: strips comments, wraps method bodies in try/catch, then compiles with the bundled Mono `mcs.dll`). Its parser loses track on an apostrophe anywhere in the file (strings or comments) and the mod then fails with `CS1525 Unexpected symbol try`. Never use apostrophes in a source mod, and avoid escaped quotes. A normal compiler will not catch this; the 15 Nov session reproduced it by calling `StripComments` / `HandleObjectParsing` from `Assembly-CSharp.dll` by reflection and parsing the result with `mcs.dll --parse` in 32-bit PowerShell.
 
 ## Installing
 
@@ -74,13 +76,15 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 5. Verify by SHA-256 that the installed file matches the build. The game will ask once to approve a changed mod.
 6. Install on **both PCs** when Marc asks for "both"; for multiplayer between them, both need the same mod version (ISP Business checks its own protocol version; vanilla checks nothing).
 
-## Installed builds (4090 updated 15 Nov 2026, laptop checked 14 Nov)
+## Installed builds (4090 updated 15 Nov 2026 with the MegaMod compatibility builds, laptop checked 14 Nov)
 
 | Mod | 4090 desktop | 3070 laptop | Repo default branch |
 |---|---|---|---|
-| ISP Business | 0.6.0 (`a645ec80…0957`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
-| Server Hosting Business | repo DLL (`be75ec0c…885e`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
-| Realistic Population growth | merged `.cs` (`c141e090…a004`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
+| ISP Business | 0.6.1 from `claude/megamod-compat` (`29095f53…0c6d`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
+| Server Hosting Business | `claude/megamod-compat` DLL (`507b2227…0e3d`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
+| Realistic Population growth | `claude/megamod-compat` `.cs` (`cb6a39b6…53f7`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
+
+The 4090 builds above come from branch `claude/megamod-compat` (pushed, PR not merged yet), so the 4090 is ahead of the default branch and of the laptop. Its previous files are in `ModBackups\ISP Business pre-0.6.1\`, `ModBackups\Server Hosting Business pre-megamod-compat\` and `ModBackups\Realistic Population growth pre-megamod-compat\`.
 
 Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6 builds it ran until 15 Nov in `ModBackups\Server Hosting Business pre-repo-PR3\` (`3efcc675…f137`) and `ModBackups\Realistic Population growth pre-repo-merged\` (`8aab1e2c…4062`). Older copies of each mod are also in the claude.ai project files (`laptop-backup/`, `laptop-install/`, `server-hosting-business/`, `realistic-population/`); those aren't in this repo.
 
@@ -109,6 +113,7 @@ Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6
 - `isp-design-spec-v0.7.md`: Marc's full ISP mod design spec.
 - `isp-phase1-findings.md`: verified vanilla code findings, mod conflicts, multiplayer messaging API, decisions.
 - `hosting-power-options.md`, `hosting-rates-and-income-model.md` and `artifacts/*.html`: Server Hosting Business pricing studies.
+- `megamod-compatibility.md`, `megamod-server-features.md`: compatibility with MegaMod Core and MegaMod Data (Workshop 3813626791 and 3813625905). Marc named these two, so they are the one exception to rule 2.
 - `README.md` in that folder indexes them.
 
 ## Working with Marc
