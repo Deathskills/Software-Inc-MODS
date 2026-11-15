@@ -9,6 +9,12 @@ Turns server hosting into a real business line. Source in `Server Hosting Busine
 - **Laptop:** `f52c78fb…29d9` (checked 14 Nov), which matches no known build. Install the repo DLL there to get both PCs in step.
 - Needs 0HarmonyLoader. Meant for new games, not existing saves.
 
+## MegaMod compatibility (15 Nov 2026, branch `claude/megamod-compat`, not merged or installed)
+
+- Games are classified by term sets (MMO, multiplayer triggers, covered online-play features) so MegaMod Data's game features follow the mod's curves; vanilla results unchanged.
+- MegaMod's 8 extra OS device types reuse the existing curves: Server, Supercomputer = Computer; Smart TV, VR Headset, Emulator = Console; Tablet, Watch, Car = Phone.
+- Anti-Piracy and Game Engine still use MegaMod's raw values. Repo DLL rebuilt: sha256 `507b2227…0e3d`. Details in [../reference/megamod-compatibility.md](../reference/megamod-compatibility.md). Untested in game.
+
 ## History
 
 | PR | What |

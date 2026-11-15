@@ -69,7 +69,7 @@ Game features use these exact, case-sensitive name groups (MMO takes priority):
 
 The third group never triggers a curve by itself. Once a game matches either trigger group, all three groups are covered by this mod's multiplayer/MMO curve instead of their raw feature loads. All other features (the small general services such as Cloud Sync, Telemetry, Trading System, Battle pass and Anti-cheat) keep their normal server requirements on top. Vanilla Multiplayer/MMO behaviour is unchanged.
 
-OS (Computer, Console, Phone), Antivirus and Office Software already match. MegaMod's other OS device types, Anti-Piracy and Game Engine are not changed.
+OS, Antivirus and Office Software already match by name. MegaMod's extra OS device types reuse the three existing curves: Server and Supercomputer use the Computer curve; Smart TV, VR Headset and Emulator use the Console curve; Tablet, Watch and Car use the Phone curve. Anti-Piracy and Game Engine are not changed.
 
 ## Building
 

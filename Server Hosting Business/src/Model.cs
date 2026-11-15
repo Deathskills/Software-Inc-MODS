@@ -79,9 +79,10 @@ namespace ServerHostingBusiness
             switch (type)
             {
                 case "Operating System":
-                    if (cat == "Computer") prof.Kind = ProductKind.ComputerOS;
-                    else if (cat == "Console") prof.Kind = ProductKind.ConsoleOS;
-                    else if (cat == "Phone") prof.Kind = ProductKind.PhoneOS;
+                    // MegaMod Data device types reuse the three existing curves (Marc, 15 Nov 2026).
+                    if (cat == "Computer" || cat == "Server" || cat == "Supercomputer") prof.Kind = ProductKind.ComputerOS;
+                    else if (cat == "Console" || cat == "Smart TV" || cat == "VR Headset" || cat == "Emulator") prof.Kind = ProductKind.ConsoleOS;
+                    else if (cat == "Phone" || cat == "Tablet" || cat == "Watch" || cat == "Car") prof.Kind = ProductKind.PhoneOS;
                     break;
                 case "Antivirus":
                     if (HasNetworkSpec(feats)) prof.Kind = ProductKind.Antivirus;

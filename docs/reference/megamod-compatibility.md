@@ -22,7 +22,7 @@ Full per-feature tables: [megamod-server-features.md](megamod-server-features.md
 
 | Mod | Change |
 |---|---|
-| Realistic Population growth | Re-asserts its population every frame, so it always wins over MegaMod Core. Fans and followers are left alone. |
+| Realistic Population growth | Re-asserts its population every frame, so it always wins over MegaMod Core. Fans and followers now scale with the population at the vanilla ratio (Marc, 15 Nov) and are enforced the same way. |
 | Server Hosting Business | Game classification uses term sets instead of the two vanilla names (below). Vanilla results are unchanged. |
 | ISP Business 0.6.1 | When MegaMod Core is active and hosting lands on an ISP pool, the items are moved to the hosting group with the most spare capacity and the pool stays in ISP mode. Without MegaMod Core, or with no hosting group to move to, the old rule applies (the pool leaves ISP mode). |
 
@@ -33,13 +33,13 @@ Full per-feature tables: [megamod-server-features.md](megamod-server-features.md
 - **Online play covered by the curve** (dropped from the kept load, never a trigger): Online Lobby, Live Chat, Reconnection at Match, Automatic Balancing, Lag Compensation, Crossplay, LAN Matchmaking, NAT Traversal, Encrypted Multiplayer, DDoS Protection, Session Persistence, Server Browser, Matchmaking with MMR, Anti-Cheat Multiplayer, Cross-Region Play, Voice Chat, Spectator Mode, PvP, Battle Royale Mode, Ranked Matchmaking, Online tables, Role queue, Asynchronous messages. Added by Marc's decision on 15 Nov: Cloud Saving, Live Service Platform, Global Ranking, Clan & Guild System, Guild system, Multi Panel, Multiplatform, Remote Play, Remote Play Together.
 - **Still kept at MegaMod's value:** the general services that single-player games can also have, about 0.006 in total: Cloud Sync, Trading System, Anti-Toxicity (0.001 each), Workshop Support, Telemetry (0.0005 each), Hotfix System, Crash Reporting, Microtransactions, Anti-cheat (0.0003 each), Cloud saves, Battle pass, Account protection, Seasonal Ranking, AI upscaling (0.0002 each), Ranking Rewards.
 
-OS (Computer, Console, Phone), Antivirus (Network spec) and Office Software (Network spec, "Cloud backup") already matched by name.
+OS (Computer, Console, Phone), Antivirus (Network spec) and Office Software (Network spec, "Cloud backup") already matched by name. By Marc's decision on 15 Nov the 8 extra OS device types reuse the existing curves: Server, Supercomputer = Computer; Smart TV, VR Headset, Emulator = Console; Tablet, Watch, Car = Phone. Their own feature loads stay on top, as for the original three.
 
 ## Not changed: candidates for a compatibility option
 
 These keep MegaMod's raw `Server` values and vanilla hosting pricing. Listed so Marc can pick what a later option should cover.
 
-**The 8 OS device types we have no curve for** (features with a server load that each can use; 0.0002 each unless noted):
+**The 8 extra OS device types** (now on our curves, see above; listed for reference) (features with a server load that each can use; 0.0002 each unless noted):
 
 | Device | Online features |
 |---|---|
@@ -80,7 +80,7 @@ Priority is single player. For later:
 
 ## Open
 
-1. Fans and followers follow MegaMod's smaller curve while its population option is on. Simplest: switch that option off in MegaMod Core (Settings, World).
+1. Done 15 Nov: fans and followers scale with our population and override MegaMod's.
 2. Done 15 Nov: Cloud Saving and the other online game features moved under our curves.
-3. Decide whether the 8 extra OS device types, Anti-Piracy and Game Engine get their own curves or an option.
+3. Done 15 Nov for the 8 OS device types. Anti-Piracy and Game Engine are still on MegaMod's raw values.
 4. Nothing here has been tested in game.

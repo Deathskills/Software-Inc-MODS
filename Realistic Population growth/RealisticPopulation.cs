@@ -1,8 +1,9 @@
 // Realistic Population growth - Software Inc. code mod
 // Sets MarketSimulation.Population from the in-game date so the market grows
 // like the real-world largest platform ecosystem (1980 onwards).
-// No Harmony, no method patches: only the public static Population field is
-// written, so other software/server/distribution mods are not affected.
+// No Harmony, no method patches: only the public static Population, FanPopulation
+// and FollowerPopulation fields are written (fans and followers keep their vanilla
+// ratio to the population), so other software/server/distribution mods are not affected.
 // Vanilla category multipliers (Computer 0.95, Console 0.75, Phone 1.0) still apply.
 using System;
 using UnityEngine;
@@ -18,7 +19,7 @@ public class RealisticPopulationMeta : ModMeta
         label.text = "Population follows the real-world largest platform ecosystem, scaled to the game.\n" +
                      "1980-1995: 145.6M (vanilla), 2025: ~992M, 2050 and later: 1.4B (flat).\n" +
                      "Current population: " + MarketSimulation.Population.ToString("N0") + "\n" +
-                     "Overrides other population mods (for example MegaMod Core's 'Population follows the real year').";
+                     "Fans and followers scale with it. Overrides other population mods (for example MegaMod Core's 'Population follows the real year').";
         WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 400f, 112f), new Rect(0f, 0f, 1f, 0f));
     }
 }
@@ -26,6 +27,8 @@ public class RealisticPopulationMeta : ModMeta
 public class RealisticPopulationBehaviour : ModBehaviour
 {
     public const uint VanillaPopulation = 145613576u;
+    public const uint VanillaFans = 9100848u;       // vanilla MarketSimulation.FanPopulation
+    public const uint VanillaFollowers = 73576u;    // vanilla MarketSimulation.FollowerPopulation
 
     // Real-world largest single platform ecosystem, millions of users, 1980..2025
     // (Atari VCS -> MS-DOS -> Windows -> Facebook/Meta). See README for sources.
@@ -54,6 +57,8 @@ public class RealisticPopulationBehaviour : ModBehaviour
     private bool _active;
     private int _lastStamp = int.MinValue;
     private uint _target;
+    private uint _fanTarget;
+    private uint _followerTarget;
     private bool _targetValid;
     private GameSettings _seenGame;
     private bool _coreActive;
@@ -96,6 +101,8 @@ public class RealisticPopulationBehaviour : ModBehaviour
     {
         _active = false;
         MarketSimulation.Population = VanillaPopulation;
+        MarketSimulation.FanPopulation = VanillaFans;
+        MarketSimulation.FollowerPopulation = VanillaFollowers;
     }
 
     private void Update()
@@ -124,7 +131,15 @@ public class RealisticPopulationBehaviour : ModBehaviour
             _lastStamp = stamp;
             double year = SDateTime.BaseYear + now.Year + (now.Month + (double)now.Day / Math.Max(1, GameSettings.DaysPerMonth)) / 12.0;
             _target = PopulationAt(year);
+            // Fans and followers keep the vanilla share of the market.
+            _fanTarget = (uint)Math.Round((double)_target * VanillaFans / VanillaPopulation);
+            _followerTarget = (uint)Math.Max(1.0, Math.Round((double)_target * VanillaFollowers / VanillaPopulation));
             _targetValid = true;
+        }
+        if (_targetValid)
+        {
+            if (MarketSimulation.FanPopulation != _fanTarget) MarketSimulation.FanPopulation = _fanTarget;
+            if (MarketSimulation.FollowerPopulation != _followerTarget) MarketSimulation.FollowerPopulation = _followerTarget;
         }
         if (_targetValid && MarketSimulation.Population != _target)
         {
