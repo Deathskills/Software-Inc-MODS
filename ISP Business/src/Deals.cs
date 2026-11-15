@@ -186,7 +186,8 @@ namespace ISPBusiness
         public static double DemandOf(SoftwareProduct p)
         {
             if (p == null || p.Userbase <= 0) return 0;
-            return p.GetLoadRequirement() * 1f.BandwidthFactor(SDateTime.Now());
+            return p.GetLoadRequirement() * 1f.BandwidthFactor(SDateTime.Now()) +
+                (MegaCompat.IsIspProduct(p) ? MegaCompat.SubscriberMbps(p) : 0);
         }
 
         /// <summary>An AI company that can buy ISP service: not a player, not owned by a player, still running.</summary>

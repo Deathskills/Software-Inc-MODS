@@ -108,8 +108,15 @@ Without 0HarmonyLoader the mod stays off.
 
 With MegaMod Core active, hosting placed on an ISP pool is moved to the eligible hosting group with the most spare capacity, keeping the pool in ISP mode. If no eligible group exists or the move fails, the pool leaves ISP mode with the usual notice. Without MegaMod Core, assigning hosting still returns a pool to hosting mode as before.
 
+### MegaMod ISP products
+
+This integration only appears when MegaMod Data's "Internet Service Provider" product type is present. Your ISP products with subscribers appear as "Subscribers of ..." in the ISP Network window. They pick an available pool automatically, and you can move them like other ISP processes. Subscriber traffic uses the same data per user curve as towns, without the adoption factor because subscribers are already online. Traffic your pools carry costs wholesale transit; traffic they cannot carry costs the vanilla retail ISP rate. Both are charged on the monthly Internet bill, and the window shows last month's average subscriber traffic and how much your pools carried.
+
+AI companies' ISP products add their subscribers' traffic to their usual product bandwidth when asking for product or company-wide ISP deals. These use the existing deal offers and payments. With no products of this type, the mod works as before.
+
 ## Changelog
 
+- **0.7.0:** Your ISP products route subscriber traffic through your pools, with transit or retail ISP costs and monthly figures. AI ISP products include subscriber traffic in wholesale ISP deals. Network protocol and save version are unchanged; old monthly statistics still load.
 - **0.6.1:** Detect MegaMod Core and move accidental hosting assignments off ISP pools where possible. Network protocol and save format are unchanged.
 
 ## Building
