@@ -9,6 +9,8 @@ Everything produced in the claude.ai project "Software Inc Modding" (12–14 Nov
 | [isp-phase1-findings.md](isp-phase1-findings.md) | ISP mod phase 1: constraints, conflicts with Server Hosting Business and vanilla, verified game-code findings (§8), mod networking API and multiplayer options (§9), decisions. | Project file `isp-mod/phase1-preliminary-findings.md` |
 | [hosting-power-options.md](hosting-power-options.md) | Hosting profit and payback with a fixed $4 / $6 / $7 power price vs vanilla; wind turbine payback. Led to the $7 choice. | Artifact "Hosting Power Options" |
 | [hosting-rates-and-income-model.md](hosting-rates-and-income-model.md) | Server Hosting Business bandwidth curves, profit per Mbps, agreed rules and the offer-count model. | Artifacts "Server Hosting Rates" and "Hosting Income Comparison" |
+| [megamod-compatibility.md](megamod-compatibility.md) | Findings, changes and open decisions for running our mods with MegaMod Core and MegaMod Data (the two Workshop mods Marc named), including the multiplayer note. | Claude Code session, 15 Nov |
+| [megamod-server-features.md](megamod-server-features.md) | Generated tables of every MegaMod Data feature with a server load for Game, Operating System, Anti-Piracy, Game Engine, Antivirus and Office Software. | Generated from the Workshop files, 15 Nov |
 | [artifacts/](artifacts/) | The original interactive HTML pages of the three artifacts above. Open in a browser. | Project artifacts |
 
 Also in the repo, next to their mods:

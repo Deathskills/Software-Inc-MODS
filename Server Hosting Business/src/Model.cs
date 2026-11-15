@@ -33,7 +33,10 @@ namespace ServerHostingBusiness
             "Crossplay", "LAN Matchmaking", "NAT Traversal", "Encrypted Multiplayer", "DDoS Protection",
             "Session Persistence", "Server Browser", "Matchmaking with MMR", "Anti-Cheat Multiplayer",
             "Cross-Region Play", "Voice Chat", "Spectator Mode", "PvP", "Battle Royale Mode",
-            "Ranked Matchmaking", "Online tables", "Role queue", "Asynchronous messages"
+            "Ranked Matchmaking", "Online tables", "Role queue", "Asynchronous messages",
+            // Marc, 15 Nov 2026: the remaining MegaMod online game features follow the curves too.
+            "Cloud Saving", "Live Service Platform", "Global Ranking", "Clan & Guild System", "Guild system",
+            "Multi Panel", "Multiplatform", "Remote Play", "Remote Play Together"
         };
         public static bool MegaModTermsSeen;
 

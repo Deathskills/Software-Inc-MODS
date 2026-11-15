@@ -109,6 +109,7 @@ Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6
 - `isp-design-spec-v0.7.md`: Marc's full ISP mod design spec.
 - `isp-phase1-findings.md`: verified vanilla code findings, mod conflicts, multiplayer messaging API, decisions.
 - `hosting-power-options.md`, `hosting-rates-and-income-model.md` and `artifacts/*.html`: Server Hosting Business pricing studies.
+- `megamod-compatibility.md`, `megamod-server-features.md`: compatibility with MegaMod Core and MegaMod Data (Workshop 3813626791 and 3813625905). Marc named these two, so they are the one exception to rule 2.
 - `README.md` in that folder indexes them.
 
 ## Working with Marc
