@@ -74,15 +74,15 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 5. Verify by SHA-256 that the installed file matches the build. The game will ask once to approve a changed mod.
 6. Install on **both PCs** when Marc asks for "both"; for multiplayer between them, both need the same mod version (ISP Business checks its own protocol version; vanilla checks nothing).
 
-## Installed builds (checked 14 Nov 2026)
+## Installed builds (4090 updated 15 Nov 2026, laptop checked 14 Nov)
 
 | Mod | 4090 desktop | 3070 laptop | Repo default branch |
 |---|---|---|---|
 | ISP Business | 0.6.0 (`a645ec80…0957`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
-| Server Hosting Business | PR #6 build (`3efcc675…f137`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
-| Realistic Population growth | PR #6 `.cs` (`8aab1e2c…4062`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
+| Server Hosting Business | repo DLL (`be75ec0c…885e`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
+| Realistic Population growth | merged `.cs` (`c141e090…a004`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
 
-Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has **no** `ModBackups` folder. Older copies of each mod are also in the claude.ai project files (`laptop-backup/`, `laptop-install/`, `server-hosting-business/`, `realistic-population/`); those aren't in this repo.
+Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6 builds it ran until 15 Nov in `ModBackups\Server Hosting Business pre-repo-PR3\` (`3efcc675…f137`) and `ModBackups\Realistic Population growth pre-repo-merged\` (`8aab1e2c…4062`). Older copies of each mod are also in the claude.ai project files (`laptop-backup/`, `laptop-install/`, `server-hosting-business/`, `realistic-population/`); those aren't in this repo.
 
 ## Status and open items (summary)
 
@@ -98,8 +98,8 @@ Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has **no** `M
 **Known risks across mods**
 - **ISP + hosting double pay:** a product can pay you for an ISP deal and a hosting deal on the same traffic. Not decided yet.
 - With Server Hosting Business installed, product bandwidth (and so ISP demand and capacity needs) is much larger.
-- **Multiplayer version compatibility:** vanilla has no mod check; the PCs currently run different Server Hosting and Population builds. Rebuild and install the same source on both before multiplayer tests.
-- **Draft PR #6** is partly installed on the 4090 but unmerged and based on the pre-0.6.0 state; decide with Marc whether to rebase, cherry-pick or close it.
+- **Multiplayer version compatibility:** vanilla has no mod check; the 4090 now matches the repo, but the laptop still runs an untraced Server Hosting build (`f52c78fb`). Install the repo DLL there before multiplayer tests.
+- **Draft PR #6** is unmerged (no longer installed anywhere known) and based on the pre-0.6.0 state; decide with Marc whether to rebase, cherry-pick or close it.
 - **No `main` branch**; default is an old thread branch.
 - If a game update removes a patched method, a mod can end up half-patched. Re-check patch targets after game updates.
 
