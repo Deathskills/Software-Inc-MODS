@@ -15,7 +15,7 @@ Turns server hosting into a real business line. Source in `Server Hosting Busine
 - MegaMod's 8 extra OS device types reuse the existing curves: Server, Supercomputer = Computer; Smart TV, VR Headset, Emulator = Console; Tablet, Watch, Car = Phone.
 - Anti-Piracy and Game Engine still use MegaMod's raw values. Repo DLL rebuilt: sha256 `507b2227…0e3d`. Details in [../reference/megamod-compatibility.md](../reference/megamod-compatibility.md). Untested in game.
 
-- 15 Nov 2026, branch `claude/megamod-isp-products` (not merged or installed): no extra hosting offers for products of type "Internet Service Provider" while ISP Business is active (those pay through ISP Business). Vanilla's release-time offer is untouched. Repo DLL rebuilt: sha256 `296b9982…f725`.
+- 15 Nov 2026, branch `claude/megamod-isp-products` (installed on the 4090): no extra hosting offers for products of type "Internet Service Provider" while ISP Business is active (those pay through ISP Business). Vanilla's release-time offer is untouched. Repo DLL rebuilt: sha256 `296b9982…f725`.
 
 ## History
 
