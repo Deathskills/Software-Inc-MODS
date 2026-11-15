@@ -5,7 +5,8 @@ Turns server hosting into a real business line. Source in `Server Hosting Busine
 ## Current state (14 Nov 2026)
 
 - Repo (default branch) has the merged state from PRs #2 and #3, including a prebuilt `ServerHostingBusiness.dll` (sha256 `be75ec0c…885e`).
-- **Neither PC runs the repo DLL.** Checked 14 Nov: the 4090 has `3efcc675…f137` (built 13 Nov 21:08 from the unmerged PR #6 source; PR #6 itself still carries the old `be75ec0c` DLL). The laptop has `f52c78fb…29d9`, which matches neither and hasn't been traced. Rebuild from the source you mean to run and reinstall on both PCs to get them in step.
+- **4090:** runs the repo DLL since 15 Nov. Its previous PR #6 build (`3efcc675…f137`, built 13 Nov from the unmerged PR #6 source) is in `ModBackups\Server Hosting Business pre-repo-PR3\`.
+- **Laptop:** `f52c78fb…29d9` (checked 14 Nov), which matches no known build. Install the repo DLL there to get both PCs in step.
 - Needs 0HarmonyLoader. Meant for new games, not existing saves.
 
 ## History
@@ -23,7 +24,7 @@ Expected deal-window rates at 4 stars after PR #3 (city map, per Mb per hour): O
 
 1. **Confirm an in-game offer** matches the expected rates above.
 2. **Optional:** small display-only patch so "Maximum bandwidth usage" in the deal window counts the mod's bandwidth instead of showing 0. Offered, not requested.
-3. **Draft PR #6** also changes this mod: offers are priced as they arrive (vanilla hosting offers too), repricing is off in multiplayer, and open mod offers for products under 24 months old can expire on load. Unmerged, but its build is what runs on the 4090 (see above).
+3. **Draft PR #6** also changes this mod: offers are priced as they arrive (vanilla hosting offers too), repricing is off in multiplayer, and open mod offers for products under 24 months old can expire on load. Unmerged; its build ran on the 4090 until 15 Nov (backed up, see above).
 4. Business-star scaling uses 0–5 stars; vanilla max is 6 stars (`BusinessStars = floor(rep × 6)`). Worth a check.
 5. **Double pay with ISP Business** on the same traffic, and much larger ISP demand when both are installed (see `isp-business.md`).
 6. Interaction details with ISP Business (both postfix-only, different Harmony IDs, no overlapping patches) are listed in [../reference/isp-phase1-findings.md](../reference/isp-phase1-findings.md) §2.
