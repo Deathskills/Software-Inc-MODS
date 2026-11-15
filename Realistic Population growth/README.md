@@ -10,7 +10,7 @@ A Software Inc. code mod that replaces the game's fixed market population (vanil
 - **1995–2025:** each year adds the real-world growth of the largest single platform ecosystem (MS-DOS/Windows → Facebook/Meta), at a fixed scale.
 - **2025–2050:** constant 1.53 %/year growth (the real-world rate that would reach 10.3B in 2084).
 - **2050 onwards:** flat at 1.4B. This also keeps the game below its ~1.43B 32-bit overflow limit.
-- The value is set from the in-game date (once per in-game day, interpolated within the year), so a new game starts with the right value for its start year, and loaded saves pick it up automatically.
+- The target is calculated from the in-game date once per in-game day, interpolated within the year, and enforced every frame. New games and loaded saves pick up the right value automatically.
 - The vanilla category multipliers are untouched: Computer OS × 0.95, Console OS × 0.75, Phone OS × 1.0.
 
 | Year | In-game population |
@@ -29,7 +29,11 @@ The full yearly table with sources is in `population-data-review.md` and `popula
 - No Harmony and no patched methods. The only thing the mod writes is the public static field `MarketSimulation.Population`.
 - It does not change software types, OS multipliers, servers, distribution platforms, `FanPopulation` or `FollowerPopulation`. Other mods that read `Population` simply see the new value.
 - Disabling the mod restores the vanilla value.
-- If another mod also writes `MarketSimulation.Population`, the two will conflict; this mod re-applies its value once per in-game day.
+- If another mod writes `MarketSimulation.Population`, this mod restores its target every frame.
+
+### MegaMod Core
+
+This mod overrides other population mods, including MegaMod Core's "Population follows the real year" option. Fans and followers are left to MegaMod if its option is on. Turn MegaMod's population option off for a clean result. The first detected overwrite in a session is logged once.
 
 ## Install
 

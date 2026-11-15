@@ -17,8 +17,9 @@ public class RealisticPopulationMeta : ModMeta
         Text label = WindowManager.SpawnLabel();
         label.text = "Population follows the real-world largest platform ecosystem, scaled to the game.\n" +
                      "1980-1995: 145.6M (vanilla), 2025: ~992M, 2050 and later: 1.4B (flat).\n" +
-                     "Current population: " + MarketSimulation.Population.ToString("N0");
-        WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 400f, 64f), new Rect(0f, 0f, 1f, 0f));
+                     "Current population: " + MarketSimulation.Population.ToString("N0") + "\n" +
+                     "Overrides other population mods (for example MegaMod Core's 'Population follows the real year').";
+        WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 400f, 112f), new Rect(0f, 0f, 1f, 0f));
     }
 }
 
@@ -52,6 +53,11 @@ public class RealisticPopulationBehaviour : ModBehaviour
     private static double _scale = -1;
     private bool _active;
     private int _lastStamp = int.MinValue;
+    private uint _target;
+    private bool _targetValid;
+    private GameSettings _seenGame;
+    private bool _coreActive;
+    private bool _overwriteLogged;
 
     private static double RealAt(double year)
     {
@@ -82,6 +88,7 @@ public class RealisticPopulationBehaviour : ModBehaviour
     {
         _active = true;
         _lastStamp = int.MinValue;
+        _targetValid = false;
         Apply();
     }
 
@@ -99,11 +106,50 @@ public class RealisticPopulationBehaviour : ModBehaviour
     private void Apply()
     {
         if (TimeOfDay.Instance == null || GameSettings.Instance == null) return;
+        if (_seenGame != GameSettings.Instance)
+        {
+            _seenGame = GameSettings.Instance;
+            _lastStamp = int.MinValue;
+            _targetValid = false;
+            _overwriteLogged = false;
+            _coreActive = DetectMegaModCore();
+        }
         SDateTime now = SDateTime.Now();
         int stamp = (now.Year * 12 + now.Month) * 64 + now.Day;
-        if (stamp == _lastStamp) return; // update at most once per in-game day
-        _lastStamp = stamp;
-        double year = SDateTime.BaseYear + now.Year + (now.Month + (double)now.Day / Math.Max(1, GameSettings.DaysPerMonth)) / 12.0;
-        MarketSimulation.Population = PopulationAt(year);
+        // Check the old target before refreshing it, so normal daily growth is not
+        // mistaken for another mod's write (nor is the initial application).
+        bool foreignValue = _targetValid && MarketSimulation.Population != _target;
+        if (stamp != _lastStamp)
+        {
+            _lastStamp = stamp;
+            double year = SDateTime.BaseYear + now.Year + (now.Month + (double)now.Day / Math.Max(1, GameSettings.DaysPerMonth)) / 12.0;
+            _target = PopulationAt(year);
+            _targetValid = true;
+        }
+        if (_targetValid && MarketSimulation.Population != _target)
+        {
+            MarketSimulation.Population = _target;
+            if (foreignValue && !_overwriteLogged)
+            {
+                _overwriteLogged = true;
+                Debug.Log("[Realistic Population growth] " + (_coreActive ? "MegaMod Core" : "Another mod") +
+                    " changed the market population; keeping this mod's value.");
+            }
+        }
+    }
+
+    private static bool DetectMegaModCore()
+    {
+        try
+        {
+            foreach (ModController.DLLMod m in ModController.Instance.Mods)
+            {
+                if (m == null || !m.Active) continue;
+                if ((m.ItemTitle ?? "").IndexOf("MegaMod Core", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    (m.ModPath ?? "").IndexOf("3813626791", StringComparison.Ordinal) >= 0) return true;
+            }
+        }
+        catch { return false; }
+        return false;
     }
 }

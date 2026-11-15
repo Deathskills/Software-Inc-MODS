@@ -104,6 +104,14 @@ Without 0HarmonyLoader the mod stays off.
 - Uses none of the namespaces or types the game blocks for mods, so it doesn't need the "all access" prompt.
 - ISP data is stored only as text in the save's mod data, and no custom objects go into the save. Removing the mod returns ISP pools to normal server groups.
 
+### MegaMod compatibility
+
+With MegaMod Core active, hosting placed on an ISP pool is moved to the eligible hosting group with the most spare capacity, keeping the pool in ISP mode. If no eligible group exists or the move fails, the pool leaves ISP mode with the usual notice. Without MegaMod Core, assigning hosting still returns a pool to hosting mode as before.
+
+## Changelog
+
+- **0.6.1:** Detect MegaMod Core and move accidental hosting assignments off ISP pools where possible. Network protocol and save format are unchanged.
+
 ## Building
 
 ```

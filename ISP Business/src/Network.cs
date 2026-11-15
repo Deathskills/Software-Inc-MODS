@@ -77,6 +77,7 @@ namespace ISPBusiness
 
         public static void Reset()
         {
+            MegaCompat.Reset();
             Pools.Clear();
             Assign.Clear();
             State.Clear();
@@ -310,6 +311,32 @@ namespace ISPBusiness
                     Pools.Remove(name);
                     State.Remove(name);
                     continue;
+                }
+                if (MegaCompat.CoreActive && g.Items.Count > 0 && !g.IsCloud && g.CloudProvider == 0)
+                {
+                    try
+                    {
+                        ServerGroup target = null;
+                        double bestSpare = double.NegativeInfinity;
+                        foreach (ServerGroup candidate in gs.GetAllServerGroups(false, false))
+                        {
+                            if (candidate == null || candidate == g || IsPool(candidate) || candidate.IsCloud ||
+                                candidate.CloudProvider != 0 || candidate.Broken || candidate.PowerSum <= 0f) continue;
+                            double spare = candidate.PowerSum - candidate.LastUsed;
+                            if (spare > bestSpare) { target = candidate; bestSpare = spare; }
+                        }
+                        if (target != null)
+                        {
+                            foreach (var item in g.Items.ToList()) gs.RegisterWithServer(target.Name, item);
+                            if (g.Items.Count == 0)
+                                PendingNotices.Add("MegaMod's deal manager put hosting on ISP pool \"" + name +
+                                    "\". ISP Business moved it to server group \"" + target.Name + "\" so the pool stays in ISP mode.");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("[ISP Business] Could not move hosting off ISP pool " + name + ": " + e);
+                    }
                 }
                 if (g.Items.Count > 0 || g.IsCloud || g.CloudProvider > 0)
                 {

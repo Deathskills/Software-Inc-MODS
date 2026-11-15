@@ -11,7 +11,7 @@ namespace ServerHostingBusiness
     {
         public ProductKind Kind;
         /// <summary>Vanilla per-user server value (before the era factor) that this mod keeps,
-        /// e.g. Auto-update or Cloud backup. For games it excludes Multiplayer and MMO.</summary>
+        /// e.g. Auto-update or Cloud backup. For online games it excludes covered online-play features.</summary>
         public double KeptPerUser;
     }
 
@@ -19,8 +19,25 @@ namespace ServerHostingBusiness
     {
         private static readonly Dictionary<uint, ProductProfile> Cache = new Dictionary<uint, ProductProfile>();
         private static readonly ProductProfile NoneProfile = new ProductProfile { Kind = ProductKind.None };
+        private static readonly HashSet<string> MmoTerms = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "MMO", "MMORPG", "Persistent Servers", "Persistent world servers", "PvPvE servers"
+        };
+        private static readonly HashSet<string> MultiplayerTerms = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Multiplayer", "Online Multiplayer", "Dedicated Server"
+        };
+        private static readonly HashSet<string> OnlinePlayTerms = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Online Lobby", "Live Chat", "Reconnection at Match", "Automatic Balancing", "Lag Compensation",
+            "Crossplay", "LAN Matchmaking", "NAT Traversal", "Encrypted Multiplayer", "DDoS Protection",
+            "Session Persistence", "Server Browser", "Matchmaking with MMR", "Anti-Cheat Multiplayer",
+            "Cross-Region Play", "Voice Chat", "Spectator Mode", "PvP", "Battle Royale Mode",
+            "Ranked Matchmaking", "Online tables", "Role queue", "Asynchronous messages"
+        };
+        public static bool MegaModTermsSeen;
 
-        public static void Clear() { Cache.Clear(); }
+        public static void Clear() { Cache.Clear(); MegaModTermsSeen = false; }
 
         public static ProductProfile Get(SoftwareProduct p)
         {
@@ -71,16 +88,26 @@ namespace ServerHostingBusiness
                         prof.Kind = HasFeature(feats, "Cloud backup") ? ProductKind.OfficeCloud : ProductKind.Office;
                     break;
                 case "Game":
-                    if (HasFeature(feats, "MMO")) prof.Kind = ProductKind.MMO;
-                    else if (HasFeature(feats, "Multiplayer")) prof.Kind = ProductKind.Multiplayer;
+                    if (feats.Any(f => f != null && MmoTerms.Contains(f.Name))) prof.Kind = ProductKind.MMO;
+                    else if (feats.Any(f => f != null && MultiplayerTerms.Contains(f.Name))) prof.Kind = ProductKind.Multiplayer;
                     if (prof.Kind != ProductKind.None)
                     {
-                        var rest = feats.Where(f => f != null && f.Name != "Multiplayer" && f.Name != "MMO").ToList();
+                        if (!MegaModTermsSeen && feats.Any(f => f != null && f.Name != "MMO" && f.Name != "Multiplayer" && IsCoveredOnlineTerm(f.Name)))
+                        {
+                            MegaModTermsSeen = true;
+                            UnityEngine.Debug.Log("[Server Hosting Business] MegaMod Data game features detected; online features use this mod's multiplayer/MMO curves.");
+                        }
+                        var rest = feats.Where(f => f != null && !IsCoveredOnlineTerm(f.Name)).ToList();
                         prof.KeptPerUser = SoftwareType.GetServerRequirement(rest);
                     }
                     break;
             }
             return prof;
+        }
+
+        private static bool IsCoveredOnlineTerm(string name)
+        {
+            return MmoTerms.Contains(name) || MultiplayerTerms.Contains(name) || OnlinePlayTerms.Contains(name);
         }
     }
 
