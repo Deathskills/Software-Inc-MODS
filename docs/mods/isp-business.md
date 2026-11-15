@@ -9,7 +9,7 @@ Player-owned Internet Service Provider mod. Source in `ISP Business/src/`, user-
 - Laptop pre-0.6.0 files are backed up at `D:\SteamLibrary\steamapps\common\Software Inc\ModBackups\ISP Business pre-0.6.0\` (a copy is in the project files as `laptop-backup/ISP-Business-pre-0.6.0/`).
 - The repo does not contain a built `ISPBusiness.dll`; build from source (see the root `CLAUDE.md`).
 
-## MegaMod compatibility (15 Nov 2026, branch `claude/megamod-compat`, not merged or installed)
+## MegaMod compatibility (15 Nov 2026, branch `claude/megamod-compat`, installed on the 4090, not merged)
 
 - **0.6.1** (`ModVersion` only; protocol 4 and save version 1 unchanged): with MegaMod Core active, hosting that its deal manager registers on an ISP pool is moved to the hosting group with the most spare capacity, so the pool stays in ISP mode. No hosting group to move to: old rule (pool leaves ISP mode). See [../reference/megamod-compatibility.md](../reference/megamod-compatibility.md). Untested in game.
 
