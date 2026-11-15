@@ -65,6 +65,7 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 - The 4090 has .NET SDK 11.0.100 since 15 Nov 2026 (`dotnet build` works). The GitHub CLI (`gh`) is not installed there, so PRs are opened from the GitHub website.
 - **After building, run a security check** of the DLL's referenced types against the game's blocklist (earlier sessions did this with the game's own `Mono.Cecil.dll`). It must pass without `GiveMeFreedom`.
 - Realistic Population growth is a source mod: the game compiles `RealisticPopulation.cs` itself; nothing to build.
+- **Source mods are rewritten by the game before compiling** (`ModController.InjectTryBlocks`: strips comments, wraps method bodies in try/catch, then compiles with the bundled Mono `mcs.dll`). Its parser loses track on an apostrophe anywhere in the file (strings or comments) and the mod then fails with `CS1525 Unexpected symbol try`. Never use apostrophes in a source mod, and avoid escaped quotes. A normal compiler will not catch this; the 15 Nov session reproduced it by calling `StripComments` / `HandleObjectParsing` from `Assembly-CSharp.dll` by reflection and parsing the result with `mcs.dll --parse` in 32-bit PowerShell.
 
 ## Installing
 
@@ -81,7 +82,7 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 |---|---|---|---|
 | ISP Business | 0.6.1 from `claude/megamod-compat` (`29095f53…0c6d`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
 | Server Hosting Business | `claude/megamod-compat` DLL (`507b2227…0e3d`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
-| Realistic Population growth | `claude/megamod-compat` `.cs` (`8c0c5b7b…b1c6`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
+| Realistic Population growth | `claude/megamod-compat` `.cs` (`cb6a39b6…53f7`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
 
 The 4090 builds above come from branch `claude/megamod-compat` (pushed, PR not merged yet), so the 4090 is ahead of the default branch and of the laptop. Its previous files are in `ModBackups\ISP Business pre-0.6.1\`, `ModBackups\Server Hosting Business pre-megamod-compat\` and `ModBackups\Realistic Population growth pre-megamod-compat\`.
 

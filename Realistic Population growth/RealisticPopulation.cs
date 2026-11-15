@@ -5,6 +5,9 @@
 // and FollowerPopulation fields are written (fans and followers keep their vanilla
 // ratio to the population), so other software/server/distribution mods are not affected.
 // Vanilla category multipliers (Computer 0.95, Console 0.75, Phone 1.0) still apply.
+// NOTE: the game rewrites this file before compiling it (ModController.InjectTryBlocks).
+// Its parser loses track on apostrophes, so never use the apostrophe character anywhere
+// in this file, not in strings and not in comments.
 using System;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,7 +22,7 @@ public class RealisticPopulationMeta : ModMeta
         label.text = "Population follows the real-world largest platform ecosystem, scaled to the game.\n" +
                      "1980-1995: 145.6M (vanilla), 2025: ~992M, 2050 and later: 1.4B (flat).\n" +
                      "Current population: " + MarketSimulation.Population.ToString("N0") + "\n" +
-                     "Fans and followers scale with it. Overrides other population mods (for example MegaMod Core's 'Population follows the real year').";
+                     "Fans and followers scale with it. Overrides other population mods (for example the MegaMod Core option: Population follows the real year).";
         WindowManager.AddElementToElement(label.gameObject, parent.gameObject, new Rect(0f, 0f, 400f, 112f), new Rect(0f, 0f, 1f, 0f));
     }
 }
@@ -124,7 +127,7 @@ public class RealisticPopulationBehaviour : ModBehaviour
         SDateTime now = SDateTime.Now();
         int stamp = (now.Year * 12 + now.Month) * 64 + now.Day;
         // Check the old target before refreshing it, so normal daily growth is not
-        // mistaken for another mod's write (nor is the initial application).
+        // mistaken for a write by another mod (nor is the initial application).
         bool foreignValue = _targetValid && MarketSimulation.Population != _target;
         if (stamp != _lastStamp)
         {
@@ -148,7 +151,7 @@ public class RealisticPopulationBehaviour : ModBehaviour
             {
                 _overwriteLogged = true;
                 Debug.Log("[Realistic Population growth] " + (_coreActive ? "MegaMod Core" : "Another mod") +
-                    " changed the market population; keeping this mod's value.");
+                    " changed the market population; keeping the value of this mod.");
             }
         }
     }
