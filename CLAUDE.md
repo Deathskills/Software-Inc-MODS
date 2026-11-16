@@ -80,11 +80,11 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 
 | Mod | 4090 desktop | 3070 laptop | Repo default branch |
 |---|---|---|---|
-| ISP Business | 0.6.1 from `claude/megamod-compat` (`29095f53…0c6d`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
-| Server Hosting Business | `claude/megamod-compat` DLL (`507b2227…0e3d`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
-| Realistic Population growth | `claude/megamod-compat` `.cs` (`cb6a39b6…53f7`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
+| ISP Business | 0.7.0 (`be96d0c4…337e`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
+| Server Hosting Business | repo DLL (`296b9982…f725`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
+| Realistic Population growth | merged `.cs` (`cb6a39b6…53f7`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
 
-The 4090 builds above come from branch `claude/megamod-compat` (pushed, PR not merged yet), so the 4090 is ahead of the default branch and of the laptop. Its previous files are in `ModBackups\ISP Business pre-0.6.1\`, `ModBackups\Server Hosting Business pre-megamod-compat\` and `ModBackups\Realistic Population growth pre-megamod-compat\`.
+The 4090 builds above are the PR #11 state (merged 15 Nov) plus the ISP product integration (ISP Business 0.7.0 and the matching hosting DLL, installed 15 Nov), so the 4090 is ahead of the laptop. Backups of the PR #11 builds: `ModBackups\ISP Business pre-0.7.0\` and `ModBackups\Server Hosting Business pre-isp-products\`. Its previous files are in `ModBackups\ISP Business pre-0.6.1\`, `ModBackups\Server Hosting Business pre-megamod-compat\` and `ModBackups\Realistic Population growth pre-megamod-compat\`.
 
 Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6 builds it ran until 15 Nov in `ModBackups\Server Hosting Business pre-repo-PR3\` (`3efcc675…f137`) and `ModBackups\Realistic Population growth pre-repo-merged\` (`8aab1e2c…4062`). Older copies of each mod are also in the claude.ai project files (`laptop-backup/`, `laptop-install/`, `server-hosting-business/`, `realistic-population/`); those aren't in this repo.
 

@@ -1,11 +1,23 @@
-// MegaMod Core detection, cached until the ISP session is reset.
+// MegaMod compatibility; Core detection is cached until the ISP session is reset.
 using System;
 
 namespace ISPBusiness
 {
     public static class MegaCompat
     {
+        public const string IspProductType = "Internet Service Provider";
+
         private static bool? _coreActive;
+
+        public static bool IsIspProduct(SoftwareProduct p)
+        {
+            return p != null && p.Type != null && p.Type.Name == IspProductType;
+        }
+
+        public static double SubscriberMbps(SoftwareProduct p)
+        {
+            return p == null || p.Userbase <= 0 ? 0 : p.Userbase * Municipal.UsageMBPerUser(GameClock.Year) * 8.0 / 2592000.0;
+        }
 
         public static bool CoreActive
         {

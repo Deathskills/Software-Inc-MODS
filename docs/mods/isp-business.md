@@ -9,9 +9,12 @@ Player-owned Internet Service Provider mod. Source in `ISP Business/src/`, user-
 - Laptop pre-0.6.0 files are backed up at `D:\SteamLibrary\steamapps\common\Software Inc\ModBackups\ISP Business pre-0.6.0\` (a copy is in the project files as `laptop-backup/ISP-Business-pre-0.6.0/`).
 - The repo does not contain a built `ISPBusiness.dll`; build from source (see the root `CLAUDE.md`).
 
-## MegaMod compatibility (15 Nov 2026, branch `claude/megamod-compat`, installed on the 4090, not merged)
+## MegaMod compatibility (15 Nov 2026, PR #11 merged, installed on the 4090)
 
 - **0.6.1** (`ModVersion` only; protocol 4 and save version 1 unchanged): with MegaMod Core active, hosting that its deal manager registers on an ISP pool is moved to the hosting group with the most spare capacity, so the pool stays in ISP mode. No hosting group to move to: old rule (pool leaves ISP mode). See [../reference/megamod-compatibility.md](../reference/megamod-compatibility.md). Untested in game.
+
+- **0.7.0** (15 Nov 2026, branch `claude/megamod-isp-products`, installed on the 4090): MegaMod's "Internet Service Provider" product type. Own ISP products become `sub:<product id>` processes on the pools (carried traffic pays transit, uncarried pays the vanilla ISP rate, both on the Internet bill); AI ISP products add subscriber traffic to `Deals.DemandOf`. `ISP_Stats` gains four trailing fields; old saves load with zeros. Known quirk: a `sub:` process the player unassigns is put back on the best pool the next hour. Design in [../reference/megamod-compatibility.md](../reference/megamod-compatibility.md). Untested in game.
+- Security scan note: the 0.6.0 DLL (backup on the 4090) has the same `SINetworking.NetworkPlayer` reference as the new builds, and 0.6.0 loaded without the all-access prompt, so that reference is not a problem.
 
 ## Milestones delivered
 

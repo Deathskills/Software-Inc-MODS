@@ -38,6 +38,8 @@ namespace ServerHostingBusiness
         public const double CooldownMonths = 6.0;
 
         public static bool Patched;
+        private const string IspProductType = "Internet Service Provider";
+        private static bool? _ispBusinessActive;
 
         private bool _active;
         private GameSettings _seenGame;
@@ -78,6 +80,7 @@ namespace ServerHostingBusiness
                 Patched = false;
             }
             Profiles.Clear();
+            _ispBusinessActive = null;
         }
 
         // ---------- save data
@@ -118,6 +121,7 @@ namespace ServerHostingBusiness
                     _seenGame = GameSettings.Instance;
                     SaveState.Reset();
                     Profiles.Clear();
+                    _ispBusinessActive = null;
                     _lastHour = _lastDay = _lastMonth = int.MinValue;
                     ApplyPending();
                 }
@@ -224,6 +228,30 @@ namespace ServerHostingBusiness
         }
 
         // ---------- AI hosting offers
+        private static bool IspBusinessActive
+        {
+            get
+            {
+                if (!_ispBusinessActive.HasValue) _ispBusinessActive = DetectIspBusiness();
+                return _ispBusinessActive.Value;
+            }
+        }
+
+        private static bool DetectIspBusiness()
+        {
+            try
+            {
+                foreach (ModController.DLLMod m in ModController.Instance.Mods)
+                {
+                    if (m == null || !m.Active) continue;
+                    if ((m.ItemTitle ?? "").IndexOf("ISP Business", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        (m.Meta != null && m.Meta.Name == "ISP Business")) return true;
+                }
+            }
+            catch { return false; }
+            return false;
+        }
+
         private void MonthlyOffers()
         {
             if (IsClient()) return;
@@ -239,6 +267,7 @@ namespace ServerHostingBusiness
             foreach (SoftwareProduct p in gs.simulation.GetAllProducts(false).ToList())
             {
                 if (p == null || p.Userbase <= 0 || p.ExternalHostingActive) continue;
+                if (p.Type != null && p.Type.Name == IspProductType && IspBusinessActive) continue;
                 // ExternalHosting can keep the ID of an offer that already expired; only skip live offers.
                 if (p.ExternalHosting != 0) { bool live; lock (dw.AllDeals) live = dw.AllDeals.ContainsKey(p.ExternalHosting); if (live) continue; }
                 if (!(p.DevCompany is SimulatedCompany sc)) continue;

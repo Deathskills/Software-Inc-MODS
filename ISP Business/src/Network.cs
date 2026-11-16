@@ -39,7 +39,7 @@ namespace ISPBusiness
     /// <summary>One stream of ISP traffic: your own internet, or one deal.</summary>
     public sealed class IspProcess
     {
-        public string Key;          // "own", "deal:<id>" or "p2p:<player id>"
+        public string Key;          // "own", "deal:<id>", "sub:<product id>" or "p2p:<player id>"
         public string Label;
         public double Demand;       // Mbps wanted in the last hour
         public double Delivered;    // Mbps delivered in the last hour
@@ -50,6 +50,7 @@ namespace ISPBusiness
     public static class IspNetwork
     {
         public const string OwnKey = "own";
+        public const string SubscriberPrefix = "sub:";
 
         /// <summary>Names of the vanilla server groups in ISP mode. Saved with the game.</summary>
         public static readonly HashSet<string> Pools = new HashSet<string>();
@@ -68,6 +69,8 @@ namespace ISPBusiness
         // Mbps-hours this month, for last month's averages (the window shows last month, not live figures).
         public static double MonthOwnMbpsH, MonthOwnServedMbpsH, MonthCarriedMbpsH, MonthHours;
         public static double LastMonthOwnAvg, LastMonthOwnServedAvg, LastMonthCarriedAvg;
+        public static double MonthSubscriberCarriedMbpsH, MonthSubscriberUncarriedMbpsH;
+        public static double LastMonthSubscriberCarriedAvg, LastMonthSubscriberUncarriedAvg;
         /// <summary>Changes once a month: the window rebuilds its summary only when this changes.</summary>
         public static int StatsVersion;
         private static int _statsMonth = int.MinValue;
@@ -85,6 +88,8 @@ namespace ISPBusiness
             MonthSavings = MonthTransit = MonthRevenue = LastMonthSavings = LastMonthTransit = LastMonthRevenue = 0;
             MonthOwnMbpsH = MonthOwnServedMbpsH = MonthCarriedMbpsH = MonthHours = 0;
             LastMonthOwnAvg = LastMonthOwnServedAvg = LastMonthCarriedAvg = 0;
+            MonthSubscriberCarriedMbpsH = MonthSubscriberUncarriedMbpsH = 0;
+            LastMonthSubscriberCarriedAvg = LastMonthSubscriberUncarriedAvg = 0;
             StatsVersion++;
             _statsMonth = int.MinValue;
             PendingNotices.Clear();
@@ -213,7 +218,20 @@ namespace ISPBusiness
 
             Deals.RefreshDemand();
             Agreements.RefreshDemand();
+            RefreshSubscribers();
             Recalculate();
+
+            foreach (IspProcess p in Processes.Values.Where(p => p.Key.StartsWith(SubscriberPrefix, StringComparison.Ordinal)))
+            {
+                double carried = p.Delivered;
+                double uncarried = Math.Max(0, p.Demand - carried);
+                double transit = carried * transitRate / hoursPerMonth;
+                double cost = transit + uncarried * ispRate / hoursPerMonth;
+                if (cost > 0) gs.ServerCost += (float)cost;
+                MonthTransit += transit;
+                MonthSubscriberCarriedMbpsH += carried;
+                MonthSubscriberUncarriedMbpsH += uncarried;
+            }
 
             if (own.Delivered > 0)
             {
@@ -249,6 +267,37 @@ namespace ISPBusiness
             return own;
         }
 
+        public static IEnumerable<SoftwareProduct> OwnIspProducts()
+        {
+            Company me = GameSettings.Instance != null ? GameSettings.Instance.MyCompany : null;
+            if (me == null || me.Products == null) return Enumerable.Empty<SoftwareProduct>();
+            return me.Products.Where(p => MegaCompat.IsIspProduct(p) && p.DevCompany != null &&
+                p.DevCompany.IsLocalPlayer && p.DevCompany.ID == me.ID);
+        }
+
+        private static void RefreshSubscribers()
+        {
+            var live = new HashSet<string>();
+            foreach (SoftwareProduct p in OwnIspProducts())
+            {
+                if (p.Userbase <= 0) continue;
+                string key = SubscriberPrefix + p.ID.ToString(CultureInfo.InvariantCulture);
+                live.Add(key);
+                if (!Processes.TryGetValue(key, out IspProcess proc))
+                {
+                    proc = new IspProcess { Key = key };
+                    Processes[key] = proc;
+                }
+                proc.Label = "Subscribers of " + p.Name;
+                proc.Demand = MegaCompat.SubscriberMbps(p);
+                if (GetAssignment(key) == null && Pools.Count > 0) SetAssignment(key, BestPool());
+            }
+            // Include saved assignments: their runtime processes may not exist yet after loading.
+            foreach (string key in Processes.Keys.Concat(Assign.Keys).Distinct().Where(k =>
+                k.StartsWith(SubscriberPrefix, StringComparison.Ordinal) && !live.Contains(k)).ToList())
+                RemoveProcess(key);
+        }
+
         private static void RollMonth()
         {
             int month = GameClock.MonthIndex;
@@ -262,9 +311,12 @@ namespace ISPBusiness
                 LastMonthOwnAvg = MonthOwnMbpsH / h;
                 LastMonthOwnServedAvg = MonthOwnServedMbpsH / h;
                 LastMonthCarriedAvg = MonthCarriedMbpsH / h;
+                LastMonthSubscriberCarriedAvg = MonthSubscriberCarriedMbpsH / h;
+                LastMonthSubscriberUncarriedAvg = MonthSubscriberUncarriedMbpsH / h;
             }
             MonthSavings = MonthTransit = MonthRevenue = 0;
             MonthOwnMbpsH = MonthOwnServedMbpsH = MonthCarriedMbpsH = MonthHours = 0;
+            MonthSubscriberCarriedMbpsH = MonthSubscriberUncarriedMbpsH = 0;
             _statsMonth = month;
             StatsVersion++;
         }
@@ -278,6 +330,8 @@ namespace ISPBusiness
                 Pack.D(LastMonthSavings), Pack.D(LastMonthTransit), Pack.D(LastMonthRevenue),
                 Pack.D(MonthOwnMbpsH), Pack.D(MonthOwnServedMbpsH), Pack.D(MonthCarriedMbpsH), Pack.D(MonthHours),
                 Pack.D(LastMonthOwnAvg), Pack.D(LastMonthOwnServedAvg), Pack.D(LastMonthCarriedAvg),
+                Pack.D(MonthSubscriberCarriedMbpsH), Pack.D(MonthSubscriberUncarriedMbpsH),
+                Pack.D(LastMonthSubscriberCarriedAvg), Pack.D(LastMonthSubscriberUncarriedAvg),
             });
         }
 
@@ -292,6 +346,10 @@ namespace ISPBusiness
             LastMonthSavings = Pack.D(f[4]); LastMonthTransit = Pack.D(f[5]); LastMonthRevenue = Pack.D(f[6]);
             MonthOwnMbpsH = Pack.D(f[7]); MonthOwnServedMbpsH = Pack.D(f[8]); MonthCarriedMbpsH = Pack.D(f[9]); MonthHours = Pack.D(f[10]);
             LastMonthOwnAvg = Pack.D(f[11]); LastMonthOwnServedAvg = Pack.D(f[12]); LastMonthCarriedAvg = Pack.D(f[13]);
+            MonthSubscriberCarriedMbpsH = f.Length > 14 ? Pack.D(f[14]) : 0;
+            MonthSubscriberUncarriedMbpsH = f.Length > 15 ? Pack.D(f[15]) : 0;
+            LastMonthSubscriberCarriedAvg = f.Length > 16 ? Pack.D(f[16]) : 0;
+            LastMonthSubscriberUncarriedAvg = f.Length > 17 ? Pack.D(f[17]) : 0;
             StatsVersion++;
         }
 

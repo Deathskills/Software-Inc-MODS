@@ -68,6 +68,20 @@ A hosting deal pays a price per Mbps the product uses. Our mod sets that price (
 
 So profit per Mbps is the same; deals are just much bigger wherever MegaMod's raw values are kept.
 
+## MegaMod's "Internet Service Provider" product type (designed 15 Nov, Marc chose all three)
+
+MegaMod Data adds a normal software type named exactly "Internet Service Provider" (unlocked 1989; categories Dial up service, Online service portal, Broadband service 1999). It is the retail side: a product with subscribers and monthly fees, almost no server load, and no link to network capacity. AI company types "Internet Providers" and "Hosting Companies" release it. ISP Business is the network side. The integration keys only on the type name, adds no Harmony patches and no protocol or save-format break.
+
+| | Rule |
+|---|---|
+| A | Each of the player's own ISP products becomes an ISP process (`sub:<product id>`). Demand = subscribers x the municipal per-user traffic curve (`Municipal.UsageMBPerUser`, no adoption factor). Traffic carried by the player's pools pays wholesale transit; traffic not carried pays the vanilla retail ISP rate. Both are added to the monthly Internet bill. |
+| B | For AI ISP products, `Deals.DemandOf` adds the same subscriber traffic, so they ask for ordinary product ISP deals sized by their subscribers. No new deal kind. |
+| C | Server Hosting Business does not send its extra hosting offers for ISP-type products while ISP Business is active. Vanilla's own release-time hosting offer is left alone. |
+
+Scale check: one subscriber is about 0.00006 Mbps in 1995 and about 0.46 Mbps in 2020, so 100,000 subscribers need about 6 Mbps in 1995 and about 46,000 Mbps in 2020.
+
+Not done: poor capacity does not hurt the product's sales (that would need patching sales code). Municipal ISP is kept as is.
+
 ## Multiplayer (noted, not addressed)
 
 Priority is single player. For later:

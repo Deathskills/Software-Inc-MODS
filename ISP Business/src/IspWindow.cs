@@ -510,10 +510,14 @@ namespace ISPBusiness
         {
             // Summary: last month's results only, rebuilt when the month ticks or pools change (not live).
             double installed = IspNetwork.State.Values.Sum(st => st.Installed);
-            string summaryKey = IspNetwork.StatsVersion + "|" + IspNetwork.Pools.Count + "|" + installed.ToString("R", CultureInfo.InvariantCulture) + "|" + Deals.Active.Count;
+            bool hasIspProducts = IspNetwork.OwnIspProducts().Any();
+            string summaryKey = IspNetwork.StatsVersion + "|" + IspNetwork.Pools.Count + "|" + installed.ToString("R", CultureInfo.InvariantCulture) + "|" + Deals.Active.Count + "|" + hasIspProducts;
             if (summaryKey != _summaryKey)
             {
                 _summaryKey = summaryKey;
+                float summaryHeight = hasIspProducts ? 110f : 88f;
+                PlaceTop(_summary.gameObject, _netPanel.gameObject, 8f, 0f, 8f, summaryHeight);
+                Place(_groups.gameObject, _netPanel.gameObject, 8f, summaryHeight + 4f, 8f, 4f, 0f, 0f, 1f, 0.6f);
                 var sb = new StringBuilder();
                 sb.Append("<b>ISP pools:</b> ").Append(IspNetwork.Pools.Count)
                   .Append("   <b>Installed capacity:</b> ").Append(IspNetwork.Describe(installed))
@@ -525,6 +529,9 @@ namespace ISPBusiness
                 sb.Append("<b>Last month:</b> saved ").Append(Money(IspNetwork.LastMonthSavings)).Append(" on your own internet")
                   .Append("   <b>ISP deal income:</b> ").Append(Money(IspNetwork.LastMonthRevenue))
                   .Append("   <b>Transit paid:</b> ").Append(Money(IspNetwork.LastMonthTransit)).Append('\n');
+                if (hasIspProducts)
+                    sb.Append("Your ISP products: ").Append(IspNetwork.Describe(IspNetwork.LastMonthSubscriberCarriedAvg + IspNetwork.LastMonthSubscriberUncarriedAvg))
+                      .Append(" average last month (").Append(IspNetwork.Describe(IspNetwork.LastMonthSubscriberCarriedAvg)).Append(" carried by your pools)\n");
                 sb.Append("<i>Figures are last month's and update when the month ends. Only ISP pools are listed. If one server breaks, the pool is down and its ISP processes follow its fallback.</i>");
                 _summary.text = sb.ToString();
             }
