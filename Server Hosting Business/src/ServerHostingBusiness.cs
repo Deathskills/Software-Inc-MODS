@@ -123,6 +123,7 @@ namespace ServerHostingBusiness
                     Profiles.Clear();
                     _ispBusinessActive = null;
                     _lastHour = _lastDay = _lastMonth = int.MinValue;
+                    _offersPending = false;
                     ApplyPending();
                 }
 
@@ -138,8 +139,19 @@ namespace ServerHostingBusiness
                 {
                     bool first = _lastMonth == int.MinValue;
                     _lastMonth = monthStamp;
-                    if (!first) MonthlyOffers(); // not on the frame a save loads
+                    // Not on the frame a save loads. The offers wait for a clean product snapshot (see below).
+                    if (!first) { _offersPending = true; _offerTries = 0; }
                     Prune();
+                }
+                if (_offersPending)
+                {
+                    List<SoftwareProduct> products = SnapshotProducts();
+                    if (products != null) { _offersPending = false; MonthlyOffers(products); }
+                    else if (++_offerTries > MaxOfferTries)
+                    {
+                        _offersPending = false;
+                        Debug.Log("[Server Hosting Business] The market was busy all month; hosting offers are skipped until next month.");
+                    }
                 }
             }
             catch (Exception e)
@@ -252,7 +264,27 @@ namespace ServerHostingBusiness
             return false;
         }
 
-        private void MonthlyOffers()
+        private bool _offersPending;
+        private int _offerTries;
+        private const int MaxOfferTries = 2000; // frames
+
+        /// <summary>The game simulates the market on another thread and adds products while it runs
+        /// (mostly right at the month change). Reading the product list at that moment throws
+        /// "Collection was modified", so take a copy and report null when the market is busy;
+        /// the caller tries again on a later frame.</summary>
+        private static List<SoftwareProduct> SnapshotProducts()
+        {
+            GameSettings gs = GameSettings.Instance;
+            if (gs == null || gs.simulation == null) return new List<SoftwareProduct>();
+            for (int i = 0; i < 3; i++)
+            {
+                try { return gs.simulation.GetAllProducts(false).ToList(); }
+                catch (InvalidOperationException) { }
+            }
+            return null;
+        }
+
+        private void MonthlyOffers(List<SoftwareProduct> products)
         {
             if (IsClient()) return;
             GameSettings gs = GameSettings.Instance;
@@ -264,7 +296,7 @@ namespace ServerHostingBusiness
 
             SDateTime now = SDateTime.Now();
             var candidates = new List<KeyValuePair<SoftwareProduct, float>>();
-            foreach (SoftwareProduct p in gs.simulation.GetAllProducts(false).ToList())
+            foreach (SoftwareProduct p in products)
             {
                 if (p == null || p.Userbase <= 0 || p.ExternalHostingActive) continue;
                 if (p.Type != null && p.Type.Name == IspProductType && IspBusinessActive) continue;

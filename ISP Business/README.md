@@ -116,6 +116,7 @@ AI companies' ISP products add their subscribers' traffic to their usual product
 
 ## Changelog
 
+- **0.7.1:** Reads the market product and company lists safely while the game simulates on another thread (no more "Collection was modified" errors with large data mods).
 - **0.7.0:** Your ISP products route subscriber traffic through your pools, with transit or retail ISP costs and monthly figures. AI ISP products include subscriber traffic in wholesale ISP deals. Network protocol and save version are unchanged; old monthly statistics still load.
 - **0.6.1:** Detect MegaMod Core and move accidental hosting assignments off ISP pools where possible. Network protocol and save format are unchanged.
 
