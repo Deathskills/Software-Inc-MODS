@@ -80,8 +80,8 @@ dotnet build "Server Hosting Business/src/ServerHostingBusiness.csproj" -c Relea
 
 | Mod | 4090 desktop | 3070 laptop | Repo default branch |
 |---|---|---|---|
-| ISP Business | 0.7.0 (`be96d0c4…337e`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
-| Server Hosting Business | repo DLL (`296b9982…f725`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
+| ISP Business | 0.7.1 (`1d60df1a…89e4`) | 0.6.0, built in the cloud (`555b0c21…47a2`) | 0.6.0 source, no DLL |
+| Server Hosting Business | repo DLL (`415f72f6…4d9b`) | unknown build (`f52c78fb…29d9`) | `be75ec0c…885e` (PR #3) |
 | Realistic Population growth | merged `.cs` (`cb6a39b6…53f7`) | merged `.cs` (`c141e090…a004`) | merged `.cs` |
 
 The 4090 builds above are the PR #11 state (merged 15 Nov) plus the ISP product integration (ISP Business 0.7.0 and the matching hosting DLL, installed 15 Nov), so the 4090 is ahead of the laptop. Backups of the PR #11 builds: `ModBackups\ISP Business pre-0.7.0\` and `ModBackups\Server Hosting Business pre-isp-products\`. Its previous files are in `ModBackups\ISP Business pre-0.6.1\`, `ModBackups\Server Hosting Business pre-megamod-compat\` and `ModBackups\Realistic Population growth pre-megamod-compat\`.
@@ -105,6 +105,7 @@ Backups: laptop has `ModBackups\ISP Business pre-0.6.0\`. The 4090 has the PR #6
 - **Multiplayer version compatibility:** vanilla has no mod check; the 4090 now matches the repo, but the laptop still runs an untraced Server Hosting build (`f52c78fb`). Install the repo DLL there before multiplayer tests.
 - **Draft PR #6** is unmerged (no longer installed anywhere known) and based on the pre-0.6.0 state; decide with Marc whether to rebase, cherry-pick or close it.
 - **No `main` branch**; default is an old thread branch.
+- **Threading:** the game simulates the market on another thread and adds products there (`MarketSimulation.AddProduct` locks its private `Products` field). Reading `GetAllProducts()` / `GetAllCompanies()` or an AI company's `Products` from mod code can throw "Collection was modified", mostly right at the month change and far more often with big data mods. Always copy inside a try/catch and retry later (fixed in ISP Business 0.7.1 and the hosting DLL on 15 Nov).
 - If a game update removes a patched method, a mod can end up half-patched. Re-check patch targets after game updates.
 
 ## Reference docs (docs/reference/)

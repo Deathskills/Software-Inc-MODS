@@ -139,11 +139,27 @@ namespace ISPBusiness
             int day = GameClock.Stamp / (24 * 60);
             // Rebuilt daily, when the market changes (a load replaces it), and never kept empty.
             if (!force && day == _productsDay && sim == _productsSim && _products.Count > 0) return;
+            if (gs == null || gs.simulation == null)
+            {
+                _productsDay = day;
+                _productsSim = sim;
+                _products.Clear();
+                return;
+            }
+            // The game adds products on its simulation thread; reading the list at that moment throws
+            // "Collection was modified". Copy first, and keep the previous list if the market stays busy
+            // (the next call tries again, because the day stamp is only stored on success).
+            List<SoftwareProduct> copy = null;
+            for (int i = 0; i < 3 && copy == null; i++)
+            {
+                try { copy = gs.simulation.GetAllProducts(false).ToList(); }
+                catch (InvalidOperationException) { }
+            }
+            if (copy == null) return;
             _productsDay = day;
             _productsSim = sim;
             _products.Clear();
-            if (gs == null || gs.simulation == null) return;
-            foreach (SoftwareProduct p in gs.simulation.GetAllProducts(false))
+            foreach (SoftwareProduct p in copy)
                 if (p != null) _products[p.ID] = p;
         }
 
@@ -207,11 +223,17 @@ namespace ISPBusiness
             double sum = 0;
             if (c.Products != null)
             {
-                foreach (SoftwareProduct p in c.Products)
+                // An AI company's product list can change on the simulation thread while it is read.
+                // If that happens, use what was summed so far; the next hour reads it again.
+                try
                 {
-                    if (p == null || OtherClaims.ContainsKey(p.ID)) continue;
-                    sum += DemandOf(p);
+                    foreach (SoftwareProduct p in c.Products)
+                    {
+                        if (p == null || OtherClaims.ContainsKey(p.ID)) continue;
+                        sum += DemandOf(p);
+                    }
                 }
+                catch (InvalidOperationException) { }
             }
             if (c is SimulatedCompany sc && sc.ProjectQueue != null)
             {
@@ -481,7 +503,15 @@ namespace ISPBusiness
             int stars = gs.MyCompany.BusinessStars;
 
             var candidates = new List<KeyValuePair<Company, double>>();
-            foreach (Company c in gs.simulation.GetAllCompanies())
+            // Same threading caveat as products: copy the company list, and skip this month if the market is busy.
+            List<Company> companies = null;
+            for (int i = 0; i < 3 && companies == null; i++)
+            {
+                try { companies = gs.simulation.GetAllCompanies().ToList(); }
+                catch (InvalidOperationException) { }
+            }
+            if (companies == null) companies = new List<Company>();
+            foreach (Company c in companies)
             {
                 if (c == null || taken.Contains(c.ID) || OtherCompanyClaims.ContainsKey(c.ID)) continue;
                 if (!IsAiCompany(c) || RecentlyDeclined("c:" + c.ID, now)) continue;
